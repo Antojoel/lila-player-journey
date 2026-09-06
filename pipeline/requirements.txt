@@ -1,0 +1,4 @@
+# Pipeline dependencies (Python 3.10+; tested on 3.14)
+duckdb>=1.5
+pillow>=10
+pandas>=2.0

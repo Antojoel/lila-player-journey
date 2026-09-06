@@ -1,0 +1,15 @@
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# node
+node_modules/
+web/dist/
+*.log
+
+# os
+.DS_Store
+
+# local pipeline scratch (keep skipped.txt + coord verification images)
+pipeline/_verify/devserver.log
