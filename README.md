@@ -31,7 +31,7 @@ visible), and explicit loading / empty states.
 
 ## Tech stack
 
-- **Pipeline:** Python 3, [DuckDB](https://duckdb.org/) (Parquet reader + aggregation), Pillow (minimap re-encode). No pandas required at runtime, but it is used for convenience.
+- **Pipeline:** Python 3, [DuckDB](https://duckdb.org/) (Parquet reader + aggregation), pandas (row shaping), Pillow (minimap re-encode). One-shot batch job: ~4 s, ~1.2 GB peak RAM (row working set is ~90 MB; the rest is DuckDB's runtime + the Parquet scan), no GPU or network. Runs on any laptop or a standard ≥2 GB CI runner.
 - **Frontend:** React 18 + TypeScript, [Vite](https://vitejs.dev/) 7. Rendering is hand-rolled HTML `<canvas>` layered over the minimap image — no charting or map library.
 - **Data transport:** static JSON + WebP images served from `/public`. The only network calls are `fetch()` for those files.
 - **Hosting:** static `dist/` — Vercel, Netlify, GitHub Pages, or `npx serve` all work.

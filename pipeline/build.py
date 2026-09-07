@@ -13,7 +13,6 @@ Outputs (under web/public/):
 
 Run:  ../.venv/bin/python build.py
 """
-import base64
 import datetime as dt
 import glob
 import json
@@ -22,6 +21,7 @@ import sys
 import traceback
 
 import duckdb
+import pandas as pd
 from PIL import Image
 
 from lib import (
@@ -58,41 +58,58 @@ def parse_filename(path: str):
     return uid, mid
 
 
+_SELECT = (
+    "SELECT user_id, match_id AS match_id_col, map_id, x, z, "
+    "epoch_ms(ts) AS ts_ms, CAST(event AS VARCHAR) AS event, filename "
+    "FROM read_parquet(?, filename=true)"
+)
+
+
 def load_rows():
-    """Return (DataFrame, skipped list). One row per event across all files."""
+    """Return (DataFrame, skipped list, file count). One row per event.
+
+    Reads every file in a single query. If that fails because some file is
+    unreadable, fall back to a per-file scan that isolates and logs the
+    offenders instead of aborting.
+    """
     files = []
     for day in DAYS:
         files += sorted(glob.glob(f"{DATA}/{day}/*.nakama-0"))
 
-    con = duckdb.connect()
-    frames = []
+    # Working set is ~90 MB of rows; the rest of RSS is DuckDB's own runtime.
+    con = duckdb.connect(config={"memory_limit": "1GB", "threads": 4})
     skipped = []
-    # Read file-by-file so a single corrupt parquet can't abort the whole scan.
+    try:
+        df = con.execute(_SELECT, [files]).df()
+    except Exception:  # noqa: BLE001 - one bad file shouldn't sink the run
+        frames = []
+        for path in files:
+            try:
+                d = con.execute(_SELECT, [[path]]).df()
+                if d.empty:
+                    skipped.append((path, "empty"))
+                    continue
+                frames.append(d)
+            except Exception as e:  # noqa: BLE001 - log every failure reason
+                skipped.append((path, repr(e)))
+        if not frames:
+            raise SystemExit("No readable files found.")
+        df = pd.concat(frames, ignore_index=True)
+
+    # Files that returned zero rows never appear in the result — flag them.
+    got = set(df["filename"].unique())
     for path in files:
-        try:
-            df = con.execute(
-                "SELECT user_id, match_id AS match_id_col, map_id, x, z, "
-                "epoch_ms(ts) AS ts_ms, CAST(event AS VARCHAR) AS event "
-                f"FROM read_parquet('{path}')"
-            ).df()
-            if df.empty:
-                skipped.append((path, "empty"))
-                continue
-            day = os.path.basename(os.path.dirname(path))
-            uid_fn, mid_fn = parse_filename(path)
-            df["src_day"] = day
-            df["src_uid"] = uid_fn
-            df["src_mid"] = mid_fn
-            frames.append(df)
-        except Exception as e:  # noqa: BLE001 - want every failure reason logged
-            skipped.append((path, repr(e)))
+        if path not in got:
+            skipped.append((path, "empty / no rows"))
 
-    if not frames:
-        raise SystemExit("No readable files found.")
+    # Recover per-file identity from the filename column.
+    stems = df["filename"].map(os.path.basename).str.removesuffix(".nakama-0")
+    df["src_day"] = df["filename"].map(lambda p: os.path.basename(os.path.dirname(p)))
+    df["src_uid"] = stems.str.split("_", n=1).str[0]
+    df["src_mid"] = stems.str.split("_", n=1).str[1]
+    df = df.drop(columns=["filename"])
 
-    import pandas as pd
-
-    return pd.concat(frames, ignore_index=True), skipped, len(files)
+    return df, skipped, len(files)
 
 
 def main():
@@ -229,9 +246,17 @@ def main():
                 json.dump(out, fh, separators=(",", ":"))
 
     # --- minimap re-encode --------------------------------------------------
+    # Sources are up to 9000x9000 (Lockdown). draft() lets the JPEG decoder emit
+    # a ~1/8-scale image directly, and stepping down to 2x before the final
+    # LANCZOS pass keeps peak memory low instead of holding an 8-bit 9000^2 RGB
+    # buffer (~240 MB) in RAM.
     minimap_meta = {}
     for map_id, src in MINIMAPS.items():
-        img = Image.open(src).convert("RGB")
+        img = Image.open(src)
+        img.draft("RGB", (2048, 2048))
+        img = img.convert("RGB")
+        if max(img.size) > 2048:
+            img = img.resize((2048, 2048), Image.BILINEAR)
         if img.size != (1024, 1024):
             img = img.resize((1024, 1024), Image.LANCZOS)
         dst = os.path.join(OUT, "minimaps", f"{map_id}.webp")

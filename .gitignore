@@ -13,3 +13,7 @@ web/dist/
 
 # local pipeline scratch (keep skipped.txt + coord verification images)
 pipeline/_verify/devserver.log
+
+# assignment brief / raw dataset — not ours to redistribute
+Copy of Product Engineer*.pdf
+player_data/
