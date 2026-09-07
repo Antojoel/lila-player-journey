@@ -1,13 +1,20 @@
 import { useMemo, useState } from "react";
 import { Legend } from "./Legend";
 import { mmss, prettyDate, shortId } from "../lib/format";
-import { matchActivity } from "../lib/matchStats";
+import {
+  describeMatch,
+  matchActivity,
+  playerEventCounts,
+  quickPicks,
+} from "../lib/matchStats";
+import { BOT_COLOR } from "../lib/palette";
 import type {
   HeatmapKind,
   Manifest,
   ManifestMatch,
   MapId,
   MatchData,
+  Player,
 } from "../lib/types";
 
 interface Props {
@@ -30,6 +37,12 @@ interface Props {
   setShowHumans: (b: boolean) => void;
   showBots: boolean;
   setShowBots: (b: boolean) => void;
+  mapDim: number;
+  setMapDim: (n: number) => void;
+  focusedId: string | null;
+  onFocus: (id: string | null) => void;
+  colorFor: (p: Player) => string;
+  labelFor: (id: string) => string;
 
   heatmapKind: HeatmapKind;
   setHeatmapKind: (k: HeatmapKind) => void;
@@ -38,6 +51,8 @@ interface Props {
 export function Controls(p: Props) {
   const { manifest } = p;
   const [q, setQ] = useState("");
+
+  const picks = useMemo(() => quickPicks(p.matches), [p.matches]);
 
   const sorted = useMemo(() => {
     const list = [...p.matches];
@@ -63,9 +78,9 @@ export function Controls(p: Props) {
         </div>
       </header>
 
-      <p className="dataset-line">
-        {c.matches} matches · {c.humans} players · {c.bots} bots ·{" "}
-        {c.event_rows.toLocaleString()} events · {c.files_skipped} files skipped
+      <p className="intro">
+        See how players move through a match, or switch to a heatmap of where
+        fights and traffic concentrate across every match on a map.
       </p>
 
       <div className="seg" role="tablist" aria-label="View mode">
@@ -75,7 +90,7 @@ export function Controls(p: Props) {
           className={p.mode === "journey" ? "on" : ""}
           onClick={() => p.setMode("journey")}
         >
-          Journeys
+          One match
         </button>
         <button
           role="tab"
@@ -104,12 +119,9 @@ export function Controls(p: Props) {
         </label>
 
         <label className="field">
-          <span>{p.mode === "heatmap" ? "Date range" : "Date"}</span>
-          <select
-            value={p.dateFilter}
-            onChange={(e) => p.setDateFilter(e.target.value)}
-          >
-            <option value="all">All days</option>
+          <span>{p.mode === "heatmap" ? "Days" : "Date"}</span>
+          <select value={p.dateFilter} onChange={(e) => p.setDateFilter(e.target.value)}>
+            <option value="all">All 5 days</option>
             {manifest.dates.map((d) => (
               <option key={d} value={d}>
                 {prettyDate(d)}
@@ -121,34 +133,57 @@ export function Controls(p: Props) {
 
       {p.mode === "journey" ? (
         <>
+          {picks.length > 0 && (
+            <div className="picks">
+              <span className="picks-label">Quick picks</span>
+              <div className="picks-row">
+                {picks.map((qp) => (
+                  <button
+                    key={qp.key}
+                    className={qp.match.match_id === p.matchId ? "on" : ""}
+                    title={qp.hint}
+                    onClick={() => p.setMatchId(qp.match.match_id)}
+                  >
+                    {qp.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="list-head">
             <span>{sorted.length} matches</span>
             <input
-              placeholder="filter id / map"
+              placeholder="find by id / map"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
           <ul className="match-list">
-            {sorted.map((m) => (
-              <li key={m.match_id}>
-                <button
-                  className={m.match_id === p.matchId ? "sel" : ""}
-                  onClick={() => p.setMatchId(m.match_id)}
-                >
-                  <span className="mid">{shortId(m.match_id)}</span>
-                  <span className="tags">
-                    <span className="tag map">{m.map_id}</span>
-                    <span className="tag">{prettyDate(m.date)}</span>
-                    <span className="tag">{mmss(m.duration_ms)}</span>
-                  </span>
-                  <span className="counts">
-                    <b>{m.human_count}H</b> {m.bot_count}B · {matchActivity(m)} events
-                  </span>
-                </button>
+            {sorted.slice(0, 300).map((m) => {
+              const d = describeMatch(m);
+              return (
+                <li key={m.match_id}>
+                  <button
+                    className={m.match_id === p.matchId ? "sel" : ""}
+                    onClick={() => p.setMatchId(m.match_id)}
+                  >
+                    <span className="m-headline">{d.headline}</span>
+                    <span className="m-roster">{d.roster}</span>
+                    <span className="m-fights">{d.fights}</span>
+                    <span className="m-id">{shortId(m.match_id)} · {prettyDate(m.date)}</span>
+                  </button>
+                </li>
+              );
+            })}
+            {sorted.length === 0 && (
+              <li className="empty">No matches for this map / date.</li>
+            )}
+            {sorted.length > 300 && (
+              <li className="empty">
+                Showing the 300 busiest — narrow with the map / date filter or search.
               </li>
-            ))}
-            {sorted.length === 0 && <li className="empty">No matches for this filter.</li>}
+            )}
           </ul>
 
           <div className="toggles">
@@ -172,25 +207,40 @@ export function Controls(p: Props) {
 
           {p.matchData && (
             <div className="match-meta">
-              <div>
-                <span className="muted">Match</span> {p.matchData.match_id}
+              <div className="mm-title">
+                {p.matchData.map_id} · {mmss(p.matchData.duration_ms)} ·{" "}
+                {prettyDate(p.matchData.date)}
               </div>
-              <div className="meta-grid">
-                <span>{p.matchData.map_id}</span>
-                <span>{prettyDate(p.matchData.date)}</span>
-                <span>{mmss(p.matchData.duration_ms)}</span>
-                <span>
-                  {p.matchData.human_count}{" "}
-                  {p.matchData.human_count === 1 ? "human" : "humans"} /{" "}
-                  {p.matchData.bot_count} bots
+              <div className="mm-players">
+                <span className="mm-players-hd">
+                  Players — click one to isolate it on the map
                 </span>
-              </div>
-              <div className="meta-events">
-                {(["kill", "death", "storm_death", "loot"] as const).map((k) => (
-                  <span key={k}>
-                    {k.replace("_", " ")}: <b>{p.matchData!.event_counts[k]}</b>
-                  </span>
-                ))}
+                {[...p.matchData.players]
+                  .sort((a, b) => Number(b.human) - Number(a.human))
+                  .map((pl) => {
+                  const ec = playerEventCounts(pl);
+                  const on = p.focusedId === pl.id;
+                  return (
+                    <button
+                      key={pl.id}
+                      className={`mm-player${on ? " on" : ""}`}
+                      onClick={() => p.onFocus(pl.id)}
+                    >
+                      <span
+                        className={`sw${pl.human ? "" : " bot"}`}
+                        style={
+                          pl.human
+                            ? { background: p.colorFor(pl) }
+                            : { color: BOT_COLOR }
+                        }
+                      />
+                      <span className="mm-name">{p.labelFor(pl.id)}</span>
+                      <span className="mm-ec">
+                        {ec.kill}K {ec.death}D {ec.loot}L
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -209,19 +259,34 @@ export function Controls(p: Props) {
             ))}
           </div>
           <p className="hint muted">
-            Aggregated across every match on <b>{p.mapFilter === "all" ? "—" : p.mapFilter}</b>
+            Every match on <b>{p.mapFilter === "all" ? "—" : p.mapFilter}</b>
             {p.dateFilter === "all"
-              ? " for all five days."
-              : ` for ${prettyDate(p.dateFilter)}.`}{" "}
-            Counts are bucketed per collection day, so any date range is exact.
+              ? " across all 5 days"
+              : ` on ${prettyDate(p.dateFilter)}`}
+            , combined. Counts are bucketed per day, so the date filter is exact.
           </p>
         </>
       )}
 
+      <label className="dim-control">
+        <span className="muted">
+          Map brightness
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={0.75}
+          step={0.05}
+          value={p.mapDim}
+          onChange={(e) => p.setMapDim(Number(e.target.value))}
+        />
+      </label>
+
       <Legend mode={p.mode} heatmapKind={p.heatmapKind} />
 
       <footer className="foot muted">
-        Static precompute · no backend · data {manifest.generated_at.slice(0, 10)}
+        Static precompute · no backend · data {manifest.generated_at.slice(0, 10)} ·{" "}
+        {c.matches} matches / {c.humans} players / {c.event_rows.toLocaleString()} events
       </footer>
     </aside>
   );

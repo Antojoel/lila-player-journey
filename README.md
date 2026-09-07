@@ -23,9 +23,14 @@ storm markers, timeline playback, and kill / death / traffic heatmaps.
 | Heatmap overlays (kills / deaths / traffic) | Precomputed count grids per map, per collection day. Toggle the kind; pick a day or all days. |
 | Hosted, shareable link | Fully static build — no backend. Deploys to any static host. |
 
-Extras for the actual user: hover tooltips on every marker and path, a legend
-that is always on screen, sane defaults on load (busiest match, whole journey
-visible), and explicit loading / empty states.
+Built for the actual user (a Level Designer, not a data scientist):
+
+- Matches are described in plain language — `AmbroseValley · 6:24 · 1 human, 13 bots · 12 kills · 68 loot` — not raw hex IDs.
+- **Quick picks**: one click for "Biggest fight", "Longest match", "Most storm deaths", "Quiet match" on the current map/date.
+- Players get friendly names (**Human A**, **Bot 3**). Click one in the list — or on the map — to **isolate** just that player's route.
+- **Map brightness** slider so the paths and heatmap read clearly over the satellite minimap.
+- Timeline: play/pause (**spacebar**), jump to next/previous event, adjustable speed.
+- Hover tooltips on every marker and path, an always-visible legend, sane defaults on load (busiest match, whole journey shown), and explicit loading / empty states.
 
 ---
 

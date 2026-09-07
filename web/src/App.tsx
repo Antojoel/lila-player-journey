@@ -4,7 +4,8 @@ import { MapCanvas } from "./components/MapCanvas";
 import { Timeline } from "./components/Timeline";
 import { usePlayback } from "./hooks/usePlayback";
 import { loadHeatmap, loadManifest, loadMatch } from "./lib/api";
-import { matchActivity } from "./lib/matchStats";
+import { matchActivity, playerLabels } from "./lib/matchStats";
+import { shortId } from "./lib/format";
 import { humanColor } from "./lib/palette";
 import type {
   Heatmap,
@@ -36,6 +37,8 @@ export default function App() {
 
   const [showHumans, setShowHumans] = useState(true);
   const [showBots, setShowBots] = useState(true);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [mapDim, setMapDim] = useState(0.4);
   const [heatmapKind, setHeatmapKind] = useState<HeatmapKind>("traffic");
   const [heatmap, setHeatmap] = useState<Heatmap | null>(null);
 
@@ -82,6 +85,7 @@ export default function App() {
     }
     const id = ++reqRef.current;
     setLoadingMatch(true);
+    setFocusedId(null);
     loadMatch(matchId)
       .then((d) => {
         if (id === reqRef.current) setMatchData(d);
@@ -118,8 +122,25 @@ export default function App() {
 
   // --- playback ---
   const playback = usePlayback(matchData?.duration_ms ?? 0);
+  const { toggle: togglePlay } = playback;
 
-  // --- stable per-match colour assignment for humans ---
+  // --- keyboard: space = play/pause, esc = clear player focus ---
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
+      if (e.code === "Space" && mode === "journey") {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.key === "Escape") {
+        setFocusedId(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mode, togglePlay]);
+
+  // --- stable per-match colour + label assignment ---
   const humanIndex = useMemo(() => {
     const map = new Map<string, number>();
     let i = 0;
@@ -134,19 +155,31 @@ export default function App() {
     [humanIndex],
   );
 
+  const labels = useMemo(() => playerLabels(matchData), [matchData]);
+  const labelFor = useCallback(
+    (id: string) => labels.get(id) ?? shortId(id),
+    [labels],
+  );
+
   const allEvents = useMemo(() => {
     const out: { t: number; k: MatchData["players"][number]["events"][number]["k"] }[] = [];
     for (const pl of matchData?.players ?? []) {
       if (pl.human && !showHumans) continue;
       if (!pl.human && !showBots) continue;
+      if (focusedId && pl.id !== focusedId) continue;
       for (const e of pl.events) out.push({ t: e.t, k: e.k });
     }
-    return out;
-  }, [matchData, showHumans, showBots]);
+    return out.sort((a, b) => a.t - b.t);
+  }, [matchData, showHumans, showBots, focusedId]);
 
   const activeMapId: MapId | null =
     mode === "heatmap" ? heatMapId : (matchData?.map_id ?? null);
   const heatmapDates = dateFilter === "all" ? null : [dateFilter];
+
+  const toggleFocus = useCallback(
+    (id: string | null) => setFocusedId((cur) => (cur === id ? null : id)),
+    [],
+  );
 
   if (error) {
     return (
@@ -177,6 +210,12 @@ export default function App() {
         setShowHumans={setShowHumans}
         showBots={showBots}
         setShowBots={setShowBots}
+        mapDim={mapDim}
+        setMapDim={setMapDim}
+        focusedId={focusedId}
+        onFocus={toggleFocus}
+        colorFor={colorFor}
+        labelFor={labelFor}
         heatmapKind={heatmapKind}
         setHeatmapKind={setHeatmapKind}
       />
@@ -194,6 +233,10 @@ export default function App() {
           showHumans={showHumans}
           showBots={showBots}
           colorFor={colorFor}
+          labelFor={labelFor}
+          focusedId={focusedId}
+          onFocus={toggleFocus}
+          mapDim={mapDim}
         />
 
         {mode === "journey" && (

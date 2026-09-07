@@ -8,7 +8,7 @@ import {
   type MarkerHit,
 } from "../lib/draw";
 import { EVENT_STYLE } from "../lib/palette";
-import { mmss, shortId } from "../lib/format";
+import { mmss } from "../lib/format";
 import type { Heatmap, HeatmapKind, MapId, MatchData, Player } from "../lib/types";
 import { minimapURL } from "../lib/api";
 
@@ -24,6 +24,10 @@ interface Props {
   showHumans: boolean;
   showBots: boolean;
   colorFor: (player: Player, index: number) => string;
+  labelFor: (id: string) => string;
+  focusedId: string | null;
+  onFocus: (id: string | null) => void;
+  mapDim: number;
 }
 
 interface Tip {
@@ -49,7 +53,7 @@ function useElementSize<T extends HTMLElement>() {
 export function MapCanvas(props: Props) {
   const {
     mapId, match, loadingMatch, mode, heatmap, heatmapKind, heatmapDates,
-    tMs, showHumans, showBots, colorFor,
+    tMs, showHumans, showBots, colorFor, labelFor, focusedId, onFocus, mapDim,
   } = props;
 
   const [wrapRef, size] = useElementSize<HTMLDivElement>();
@@ -60,6 +64,7 @@ export function MapCanvas(props: Props) {
   const [hoverPlayer, setHoverPlayer] = useState<string | null>(null);
   const [tip, setTip] = useState<Tip | null>(null);
 
+  const highlightId = focusedId ?? hoverPlayer;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
   const setupCanvas = useCallback(
@@ -95,7 +100,7 @@ export function MapCanvas(props: Props) {
         showHumans,
         showBots,
         colorFor,
-        hoveredPlayerId: hoverPlayer,
+        hoveredPlayerId: highlightId,
       });
       markersRef.current = markers;
       if (hoverMarker) {
@@ -107,16 +112,24 @@ export function MapCanvas(props: Props) {
     }
   }, [
     setupCanvas, size, mode, match, tMs, showHumans, showBots, colorFor,
-    hoverPlayer, hoverMarker,
+    highlightId, hoverMarker,
   ]);
 
-  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (mode !== "journey" || !match) return;
+  const hitTest = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
-
     const m = pickMarker(markersRef.current, mx, my);
+    const p = m
+      ? null
+      : pickPath(match!, size, tMs, showHumans, showBots, mx, my);
+    return { mx, my, m, p };
+  };
+
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (mode !== "journey" || !match) return;
+    const { mx, my, m, p } = hitTest(e);
+
     if (m) {
       setHoverMarker(m);
       setHoverPlayer(m.playerId);
@@ -125,14 +138,13 @@ export function MapCanvas(props: Props) {
         y: my,
         lines: [
           { text: EVENT_STYLE[m.kind].label, color: EVENT_STYLE[m.kind].color },
-          { text: `${m.human ? "Player" : "Bot"} ${shortId(m.playerId)}` },
+          { text: labelFor(m.playerId) },
           { text: `at ${mmss(m.t)}` },
         ],
       });
       return;
     }
 
-    const p = pickPath(match, size, tMs, showHumans, showBots, mx, my);
     setHoverMarker(null);
     if (p) {
       setHoverPlayer(p.playerId);
@@ -140,14 +152,22 @@ export function MapCanvas(props: Props) {
         x: mx,
         y: my,
         lines: [
-          { text: `${p.human ? "Player" : "Bot"} ${shortId(p.playerId)}` },
+          { text: labelFor(p.playerId) },
           { text: `${p.eventCount} event${p.eventCount === 1 ? "" : "s"} on route` },
+          { text: "click to isolate" },
         ],
       });
     } else {
       setHoverPlayer(null);
       setTip(null);
     }
+  };
+
+  const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (mode !== "journey" || !match) return;
+    const { m, p } = hitTest(e);
+    const id = m?.playerId ?? p?.playerId ?? null;
+    onFocus(id); // App toggles: same id clears, null clears
   };
 
   const onLeave = () => {
@@ -161,10 +181,11 @@ export function MapCanvas(props: Props) {
   return (
     <div className="map-stage">
       <div
-        className="map-wrap"
+        className={`map-wrap${mode === "journey" && match ? " interactive" : ""}`}
         ref={wrapRef}
         onMouseMove={onMove}
         onMouseLeave={onLeave}
+        onClick={onClick}
       >
         {mapId && (
           <img
@@ -174,19 +195,31 @@ export function MapCanvas(props: Props) {
             draggable={false}
           />
         )}
+        <div className="map-dim" style={{ opacity: mapDim }} />
         <canvas className="map-layer" ref={heatRef} />
         <canvas className="map-layer" ref={journeyRef} />
 
-        {loadingMatch && (
-          <div className="map-note">Loading match…</div>
+        {focusedId && match && (
+          <button
+            className="focus-chip"
+            onClick={(e) => {
+              e.stopPropagation();
+              onFocus(null);
+            }}
+          >
+            Isolated: {labelFor(focusedId)} &nbsp;✕
+          </button>
         )}
+
+        {loadingMatch && <div className="map-note">Loading match…</div>}
         {showEmpty && (
           <div className="map-note">
-            Pick a match from the list to trace its player journeys.
+            Pick a match on the left — or a quick pick — to trace its player
+            journeys.
           </div>
         )}
         {mode === "heatmap" && heatmap && heatmapDates?.length === 0 && (
-          <div className="map-note">No events on the selected date(s).</div>
+          <div className="map-note">No events on the selected date.</div>
         )}
 
         {tip && (
