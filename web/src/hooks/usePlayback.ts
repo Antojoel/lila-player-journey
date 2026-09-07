@@ -51,7 +51,10 @@ export function usePlayback(duration: number): Playback {
     setPlaying(true);
   }, [duration]);
   const pause = useCallback(() => setPlaying(false), []);
-  const toggle = useCallback(() => (playing ? pause() : play()), [playing, play, pause]);
+  const toggle = useCallback(
+    () => (playing ? pause() : play()),
+    [playing, play, pause],
+  );
   const seek = useCallback(
     (v: number) => {
       setPlaying(false);

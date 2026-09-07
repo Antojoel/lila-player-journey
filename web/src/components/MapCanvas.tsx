@@ -52,8 +52,21 @@ function useElementSize<T extends HTMLElement>() {
 
 export function MapCanvas(props: Props) {
   const {
-    mapId, match, loadingMatch, mode, heatmap, heatmapKind, heatmapDates,
-    tMs, showHumans, showBots, colorFor, labelFor, focusedId, onFocus, mapDim,
+    mapId,
+    match,
+    loadingMatch,
+    mode,
+    heatmap,
+    heatmapKind,
+    heatmapDates,
+    tMs,
+    showHumans,
+    showBots,
+    colorFor,
+    labelFor,
+    focusedId,
+    onFocus,
+    mapDim,
   } = props;
 
   const [wrapRef, size] = useElementSize<HTMLDivElement>();
@@ -111,8 +124,16 @@ export function MapCanvas(props: Props) {
       ctx.clearRect(0, 0, size, size);
     }
   }, [
-    setupCanvas, size, mode, match, tMs, showHumans, showBots, colorFor,
-    highlightId, hoverMarker,
+    setupCanvas,
+    size,
+    mode,
+    match,
+    tMs,
+    showHumans,
+    showBots,
+    colorFor,
+    highlightId,
+    hoverMarker,
   ]);
 
   const hitTest = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -120,9 +141,7 @@ export function MapCanvas(props: Props) {
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
     const m = pickMarker(markersRef.current, mx, my);
-    const p = m
-      ? null
-      : pickPath(match!, size, tMs, showHumans, showBots, mx, my);
+    const p = m ? null : pickPath(match!, size, tMs, showHumans, showBots, mx, my);
     return { mx, my, m, p };
   };
 
@@ -214,8 +233,7 @@ export function MapCanvas(props: Props) {
         {loadingMatch && <div className="map-note">Loading match…</div>}
         {showEmpty && (
           <div className="map-note">
-            Pick a match on the left — or a quick pick — to trace its player
-            journeys.
+            Pick a match on the left — or a quick pick — to trace its player journeys.
           </div>
         )}
         {mode === "heatmap" && heatmap && heatmapDates?.length === 0 && (

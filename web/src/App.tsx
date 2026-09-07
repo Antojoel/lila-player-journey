@@ -156,13 +156,11 @@ export default function App() {
   );
 
   const labels = useMemo(() => playerLabels(matchData), [matchData]);
-  const labelFor = useCallback(
-    (id: string) => labels.get(id) ?? shortId(id),
-    [labels],
-  );
+  const labelFor = useCallback((id: string) => labels.get(id) ?? shortId(id), [labels]);
 
   const allEvents = useMemo(() => {
-    const out: { t: number; k: MatchData["players"][number]["events"][number]["k"] }[] = [];
+    const out: { t: number; k: MatchData["players"][number]["events"][number]["k"] }[] =
+      [];
     for (const pl of matchData?.players ?? []) {
       if (pl.human && !showHumans) continue;
       if (!pl.human && !showBots) continue;

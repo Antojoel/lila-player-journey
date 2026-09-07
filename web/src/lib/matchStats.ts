@@ -18,7 +18,9 @@ export function describeMatch(m: ManifestMatch) {
   const fightBits: string[] = [];
   if (e.kill) fightBits.push(`${e.kill} kill${e.kill === 1 ? "" : "s"}`);
   if (e.death + e.storm_death)
-    fightBits.push(`${e.death + e.storm_death} death${e.death + e.storm_death === 1 ? "" : "s"}`);
+    fightBits.push(
+      `${e.death + e.storm_death} death${e.death + e.storm_death === 1 ? "" : "s"}`,
+    );
   if (e.storm_death) fightBits.push(`${e.storm_death} storm`);
   if (e.loot) fightBits.push(`${e.loot} loot`);
   return {
@@ -42,16 +44,34 @@ export function quickPicks(matches: ManifestMatch[]): QuickPick[] {
   const by = (fn: (m: ManifestMatch) => number) =>
     [...matches].sort((a, b) => fn(b) - fn(a))[0];
 
-  const biggest = by((m) => m.event_counts.kill + m.event_counts.death + m.event_counts.storm_death);
-  if (biggest) out.push({ key: "fight", label: "Biggest fight", hint: "most kills + deaths", match: biggest });
+  const biggest = by(
+    (m) => m.event_counts.kill + m.event_counts.death + m.event_counts.storm_death,
+  );
+  if (biggest)
+    out.push({
+      key: "fight",
+      label: "Biggest fight",
+      hint: "most kills + deaths",
+      match: biggest,
+    });
 
   const longest = by((m) => m.duration_ms);
   if (longest && longest !== biggest)
-    out.push({ key: "long", label: "Longest match", hint: "ran the full timer", match: longest });
+    out.push({
+      key: "long",
+      label: "Longest match",
+      hint: "ran the full timer",
+      match: longest,
+    });
 
   const storm = by((m) => m.event_counts.storm_death);
   if (storm && storm.event_counts.storm_death > 0)
-    out.push({ key: "storm", label: "Most storm deaths", hint: "players caught by the zone", match: storm });
+    out.push({
+      key: "storm",
+      label: "Most storm deaths",
+      hint: "players caught by the zone",
+      match: storm,
+    });
 
   // A "normal" quiet match: shortest activity among matches of typical length.
   const median = [...matches].map((m) => m.duration_ms).sort((a, b) => a - b)[
@@ -61,7 +81,12 @@ export function quickPicks(matches: ManifestMatch[]): QuickPick[] {
     .filter((m) => m.duration_ms >= median * 0.6)
     .sort((a, b) => matchActivity(a) - matchActivity(b))[0];
   if (calm && !out.some((q) => q.match === calm))
-    out.push({ key: "calm", label: "Quiet match", hint: "little combat, mostly looting", match: calm });
+    out.push({
+      key: "calm",
+      label: "Quiet match",
+      hint: "little combat, mostly looting",
+      match: calm,
+    });
 
   return out.slice(0, 4);
 }
@@ -74,7 +99,10 @@ export function playerLabels(match: MatchData | null): Map<string, string> {
   let b = 0;
   for (const p of match.players) {
     if (p.human) {
-      map.set(p.id, `Human ${String.fromCharCode(65 + (h % 26))}${h >= 26 ? Math.floor(h / 26) : ""}`);
+      map.set(
+        p.id,
+        `Human ${String.fromCharCode(65 + (h % 26))}${h >= 26 ? Math.floor(h / 26) : ""}`,
+      );
       h++;
     } else {
       b++;

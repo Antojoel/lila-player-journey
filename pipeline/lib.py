@@ -1,4 +1,5 @@
 """Shared parsing/coordinate helpers for the LILA player-journey pipeline."""
+
 import re
 
 UUID_RE = re.compile(
@@ -7,9 +8,9 @@ UUID_RE = re.compile(
 
 # Per-map world->minimap config (minimap images are 1024x1024). From dataset README.
 MAP_CONFIG = {
-    "AmbroseValley": {"scale": 900,  "origin_x": -370, "origin_z": -473},
-    "GrandRift":     {"scale": 581,  "origin_x": -290, "origin_z": -290},
-    "Lockdown":      {"scale": 1000, "origin_x": -500, "origin_z": -500},
+    "AmbroseValley": {"scale": 900, "origin_x": -370, "origin_z": -473},
+    "GrandRift": {"scale": 581, "origin_x": -290, "origin_z": -290},
+    "Lockdown": {"scale": 1000, "origin_x": -500, "origin_z": -500},
 }
 IMG_SIZE = 1024
 
@@ -18,9 +19,12 @@ IMG_SIZE = 1024
 TS_SCALE = 1000
 
 EVENT_KINDS = {
-    "Position": "move", "BotPosition": "move",
-    "Kill": "kill", "BotKill": "kill",
-    "Killed": "death", "BotKilled": "death",
+    "Position": "move",
+    "BotPosition": "move",
+    "Kill": "kill",
+    "BotKill": "kill",
+    "Killed": "death",
+    "BotKilled": "death",
     "KilledByStorm": "storm_death",
     "Loot": "loot",
 }

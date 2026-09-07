@@ -56,7 +56,9 @@ export function Controls(p: Props) {
 
   const sorted = useMemo(() => {
     const list = [...p.matches];
-    list.sort((a, b) => matchActivity(b) - matchActivity(a) || b.duration_ms - a.duration_ms);
+    list.sort(
+      (a, b) => matchActivity(b) - matchActivity(a) || b.duration_ms - a.duration_ms,
+    );
     if (!q.trim()) return list;
     const needle = q.trim().toLowerCase();
     return list.filter(
@@ -79,8 +81,8 @@ export function Controls(p: Props) {
       </header>
 
       <p className="intro">
-        See how players move through a match, or switch to a heatmap of where
-        fights and traffic concentrate across every match on a map.
+        See how players move through a match, or switch to a heatmap of where fights and
+        traffic concentrate across every match on a map.
       </p>
 
       <div className="seg" role="tablist" aria-label="View mode">
@@ -120,7 +122,10 @@ export function Controls(p: Props) {
 
         <label className="field">
           <span>{p.mode === "heatmap" ? "Days" : "Date"}</span>
-          <select value={p.dateFilter} onChange={(e) => p.setDateFilter(e.target.value)}>
+          <select
+            value={p.dateFilter}
+            onChange={(e) => p.setDateFilter(e.target.value)}
+          >
             <option value="all">All 5 days</option>
             {manifest.dates.map((d) => (
               <option key={d} value={d}>
@@ -171,7 +176,9 @@ export function Controls(p: Props) {
                     <span className="m-headline">{d.headline}</span>
                     <span className="m-roster">{d.roster}</span>
                     <span className="m-fights">{d.fights}</span>
-                    <span className="m-id">{shortId(m.match_id)} · {prettyDate(m.date)}</span>
+                    <span className="m-id">
+                      {shortId(m.match_id)} · {prettyDate(m.date)}
+                    </span>
                   </button>
                 </li>
               );
@@ -218,29 +225,29 @@ export function Controls(p: Props) {
                 {[...p.matchData.players]
                   .sort((a, b) => Number(b.human) - Number(a.human))
                   .map((pl) => {
-                  const ec = playerEventCounts(pl);
-                  const on = p.focusedId === pl.id;
-                  return (
-                    <button
-                      key={pl.id}
-                      className={`mm-player${on ? " on" : ""}`}
-                      onClick={() => p.onFocus(pl.id)}
-                    >
-                      <span
-                        className={`sw${pl.human ? "" : " bot"}`}
-                        style={
-                          pl.human
-                            ? { background: p.colorFor(pl) }
-                            : { color: BOT_COLOR }
-                        }
-                      />
-                      <span className="mm-name">{p.labelFor(pl.id)}</span>
-                      <span className="mm-ec">
-                        {ec.kill}K {ec.death}D {ec.loot}L
-                      </span>
-                    </button>
-                  );
-                })}
+                    const ec = playerEventCounts(pl);
+                    const on = p.focusedId === pl.id;
+                    return (
+                      <button
+                        key={pl.id}
+                        className={`mm-player${on ? " on" : ""}`}
+                        onClick={() => p.onFocus(pl.id)}
+                      >
+                        <span
+                          className={`sw${pl.human ? "" : " bot"}`}
+                          style={
+                            pl.human
+                              ? { background: p.colorFor(pl) }
+                              : { color: BOT_COLOR }
+                          }
+                        />
+                        <span className="mm-name">{p.labelFor(pl.id)}</span>
+                        <span className="mm-ec">
+                          {ec.kill}K {ec.death}D {ec.loot}L
+                        </span>
+                      </button>
+                    );
+                  })}
               </div>
             </div>
           )}
@@ -254,7 +261,11 @@ export function Controls(p: Props) {
                 className={p.heatmapKind === k ? "on" : ""}
                 onClick={() => p.setHeatmapKind(k)}
               >
-                {k === "traffic" ? "Traffic" : k === "kill" ? "Kill zones" : "Death zones"}
+                {k === "traffic"
+                  ? "Traffic"
+                  : k === "kill"
+                    ? "Kill zones"
+                    : "Death zones"}
               </button>
             ))}
           </div>
@@ -269,9 +280,7 @@ export function Controls(p: Props) {
       )}
 
       <label className="dim-control">
-        <span className="muted">
-          Map brightness
-        </span>
+        <span className="muted">Map brightness</span>
         <input
           type="range"
           min={0}
@@ -286,7 +295,8 @@ export function Controls(p: Props) {
 
       <footer className="foot muted">
         Static precompute · no backend · data {manifest.generated_at.slice(0, 10)} ·{" "}
-        {c.matches} matches / {c.humans} players / {c.event_rows.toLocaleString()} events
+        {c.matches} matches / {c.humans} players / {c.event_rows.toLocaleString()}{" "}
+        events
       </footer>
     </aside>
   );

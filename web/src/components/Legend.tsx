@@ -55,8 +55,13 @@ export function Legend({
           <div className="legend-row">
             <svg width="34" height="14" aria-hidden>
               <line
-                x1="1" y1="7" x2="33" y2="7"
-                stroke="#8fa9cc" strokeWidth="2" strokeDasharray="5 5"
+                x1="1"
+                y1="7"
+                x2="33"
+                y2="7"
+                stroke="#8fa9cc"
+                strokeWidth="2"
+                strokeDasharray="5 5"
               />
             </svg>
             <span>Bot — dashed, muted grey</span>
@@ -85,7 +90,8 @@ export function Legend({
             <span>high</span>
           </div>
           <p className="legend-note muted">
-            {heatmapKind === "traffic" && "Density of position samples — where players spend time."}
+            {heatmapKind === "traffic" &&
+              "Density of position samples — where players spend time."}
             {heatmapKind === "kill" && "Where the killing player was standing."}
             {heatmapKind === "death" && "Where players died, including storm deaths."}
           </p>

@@ -11,8 +11,14 @@ Outputs (under web/public/):
   data/heatmaps/<map>_<kind>.json - sparse per-date count grids (kill/death/traffic)
   minimaps/<map>.webp             - web-friendly re-encode of each 1024x1024 minimap
 
-Run:  ../.venv/bin/python build.py
+Run:      python build.py
+Configure via environment variables:
+  PLAYER_DATA_DIR   raw dataset root (default: ~/Downloads/player_data)
+  OUTPUT_DIR        where to write data/ + minimaps/ (default: ../web/public)
+  DATASET_YEAR      year for the <Month>_<DD> collection folders (default: 2026)
 """
+
+import calendar
 import datetime as dt
 import glob
 import json
@@ -32,30 +38,43 @@ from lib import (
     world_to_pixel,
 )
 
-DATA = "/Users/user/Downloads/player_data"
-DAYS = ["February_10", "February_11", "February_12", "February_13", "February_14"]
-OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "web", "public"))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+DATA = os.path.expanduser(os.environ.get("PLAYER_DATA_DIR", "~/Downloads/player_data"))
+OUT = os.path.abspath(
+    os.environ.get("OUTPUT_DIR", os.path.join(_HERE, "..", "web", "public"))
+)
+DATASET_YEAR = int(os.environ.get("DATASET_YEAR", "2026"))
 DATA_OUT = os.path.join(OUT, "data")
-VERIFY = os.path.join(os.path.dirname(__file__), "_verify")
+VERIFY = os.path.join(_HERE, "_verify")
 
-HEATMAP_GRID = 96          # NxN cells per map
-HEATMAP_KINDS = ("kill", "death", "traffic")
-MINIMAPS = {
-    "AmbroseValley": f"{DATA}/minimaps/AmbroseValley_Minimap.png",
-    "GrandRift": f"{DATA}/minimaps/GrandRift_Minimap.png",
-    "Lockdown": f"{DATA}/minimaps/Lockdown_Minimap.jpg",
+HEATMAP_GRID = 96  # NxN cells per map
+MINIMAP_SOURCES = {
+    "AmbroseValley": ["AmbroseValley_Minimap.png", "AmbroseValley.png"],
+    "GrandRift": ["GrandRift_Minimap.png", "GrandRift.png"],
+    "Lockdown": ["Lockdown_Minimap.jpg", "Lockdown_Minimap.png", "Lockdown.jpg"],
 }
+
+_MONTHS = {name.lower(): i for i, name in enumerate(calendar.month_name) if name}
+
+
+def discover_day_dirs() -> list[str]:
+    """Every immediate sub-directory of DATA that holds *.nakama-0 files."""
+    out = []
+    for name in sorted(os.listdir(DATA)):
+        d = os.path.join(DATA, name)
+        if os.path.isdir(d) and glob.glob(os.path.join(d, "*.nakama-0")):
+            out.append(name)
+    return out
 
 
 def folder_date(day: str) -> str:
-    return dt.date(2026, 2, int(day.split("_")[1])).isoformat()
-
-
-def parse_filename(path: str):
-    base = os.path.basename(path)
-    stem = base[:-len(".nakama-0")] if base.endswith(".nakama-0") else base
-    uid, mid = stem.split("_", 1)
-    return uid, mid
+    """`February_10` -> `2026-02-10`. Unparseable names pass through unchanged."""
+    parts = day.split("_")
+    if len(parts) == 2 and parts[0].lower() in _MONTHS and parts[1].isdigit():
+        return dt.date(
+            DATASET_YEAR, _MONTHS[parts[0].lower()], int(parts[1])
+        ).isoformat()
+    return day
 
 
 _SELECT = (
@@ -73,8 +92,13 @@ def load_rows():
     offenders instead of aborting.
     """
     files = []
-    for day in DAYS:
-        files += sorted(glob.glob(f"{DATA}/{day}/*.nakama-0"))
+    for day in discover_day_dirs():
+        files += sorted(glob.glob(os.path.join(DATA, day, "*.nakama-0")))
+    if not files:
+        raise SystemExit(
+            f"No *.nakama-0 files found under {DATA!r}. "
+            "Set PLAYER_DATA_DIR to the dataset root."
+        )
 
     # Working set is ~90 MB of rows; the rest of RSS is DuckDB's own runtime.
     con = duckdb.connect(config={"memory_limit": "1GB", "threads": 4})
@@ -93,7 +117,7 @@ def load_rows():
             except Exception as e:  # noqa: BLE001 - log every failure reason
                 skipped.append((path, repr(e)))
         if not frames:
-            raise SystemExit("No readable files found.")
+            raise SystemExit("No readable files found.") from None
         df = pd.concat(frames, ignore_index=True)
 
     # Files that returned zero rows never appear in the result — flag them.
@@ -123,7 +147,9 @@ def main():
     # --- basic sanity / cleaning -------------------------------------------------
     unknown_events = sorted(set(df.event.unique()) - set(EVENT_KINDS))
     if unknown_events:
-        print("WARNING unknown event types (kept, classified as 'other'):", unknown_events)
+        print(
+            "WARNING unknown event types (kept, classified as 'other'):", unknown_events
+        )
     bad_map = sorted(set(df.map_id.unique()) - set(MAP_CONFIG))
     if bad_map:
         print("WARNING rows on unknown maps (dropped):", bad_map)
@@ -137,20 +163,24 @@ def main():
     col_mid = df.match_id_col.str.replace(".nakama-0", "", regex=False)
     mismatch = int((col_mid != df.src_mid).sum())
     if mismatch:
-        print(f"WARNING {mismatch} rows where filename match_id != column match_id "
-              "(using filename)")
+        print(
+            f"WARNING {mismatch} rows where filename match_id != column match_id "
+            "(using filename)"
+        )
 
     # A match that shows up under more than one collection day -> earliest wins.
     day_by_match = df.groupby("src_mid").src_day.agg(lambda s: sorted(set(s)))
     multi_day = {m: d for m, d in day_by_match.items() if len(d) > 1}
     if multi_day:
-        print(f"NOTE {len(multi_day)} matches span multiple day folders; "
-              "assigning the earliest.")
+        print(
+            f"NOTE {len(multi_day)} matches span multiple day folders; "
+            "assigning the earliest."
+        )
 
     # --- per-match JSON --------------------------------------------------------
     manifest_matches = []
     px_col, py_col = [], []
-    for x, z, m in zip(df.x.values, df.z.values, df.map_id.values):
+    for x, z, m in zip(df.x.values, df.z.values, df.map_id.values, strict=True):
         p = world_to_pixel(float(x), float(z), m)
         px_col.append(round(p[0], 1))
         py_col.append(round(p[1], 1))
@@ -169,19 +199,23 @@ def main():
         ev_totals = {"kill": 0, "death": 0, "storm_death": 0, "loot": 0}
         for uid, pdf in mdf.groupby("src_uid", sort=False):
             pdf = pdf.sort_values("t")
-            path = [[float(a), float(b), int(c)]
-                    for a, b, c in zip(pdf.px, pdf.py, pdf.t)]
+            path = [
+                [float(a), float(b), int(c)]
+                for a, b, c in zip(pdf.px, pdf.py, pdf.t, strict=True)
+            ]
             events = []
-            for a, b, c, k in zip(pdf.px, pdf.py, pdf.t, pdf.kind):
+            for a, b, c, k in zip(pdf.px, pdf.py, pdf.t, pdf.kind, strict=True):
                 if k in ("kill", "death", "storm_death", "loot"):
                     events.append({"k": k, "px": float(a), "py": float(b), "t": int(c)})
                     ev_totals[k] += 1
-            players.append({
-                "id": uid,
-                "human": bool(pdf.is_human.iat[0]),
-                "path": path,
-                "events": events,
-            })
+            players.append(
+                {
+                    "id": uid,
+                    "human": bool(pdf.is_human.iat[0]),
+                    "path": path,
+                    "events": events,
+                }
+            )
 
         human_ids = mdf[mdf.is_human].src_uid.nunique()
         bot_ids = mdf[~mdf.is_human].src_uid.nunique()
@@ -198,15 +232,17 @@ def main():
         with open(os.path.join(DATA_OUT, "matches", f"{mid}.json"), "w") as fh:
             json.dump(match_obj, fh, separators=(",", ":"))
 
-        manifest_matches.append({
-            "match_id": mid,
-            "map_id": map_id,
-            "date": date,
-            "duration_ms": duration_ms,
-            "human_count": int(human_ids),
-            "bot_count": int(bot_ids),
-            "event_counts": ev_totals,
-        })
+        manifest_matches.append(
+            {
+                "match_id": mid,
+                "map_id": map_id,
+                "date": date,
+                "duration_ms": duration_ms,
+                "human_count": int(human_ids),
+                "bot_count": int(bot_ids),
+                "event_counts": ev_totals,
+            }
+        )
 
     manifest_matches.sort(key=lambda r: (r["date"], r["map_id"], r["match_id"]))
 
@@ -224,7 +260,7 @@ def main():
             per_date = {}
             for date_key, ddf in sub.groupby(sub.src_day.map(folder_date)):
                 counts = {}
-                for a, b in zip(ddf.px, ddf.py):
+                for a, b in zip(ddf.px, ddf.py, strict=True):
                     c = min(HEATMAP_GRID - 1, max(0, int(a / 1024 * HEATMAP_GRID)))
                     r = min(HEATMAP_GRID - 1, max(0, int(b / 1024 * HEATMAP_GRID)))
                     idx = r * HEATMAP_GRID + c
@@ -237,12 +273,14 @@ def main():
                 "grid": HEATMAP_GRID,
                 "image_size": 1024,
                 "note": "cell counts are per collection day; frontend sums the "
-                        "selected date range. 'kill' = killer position, "
-                        "'death' = victim position (incl. storm), "
-                        "'traffic' = Position/BotPosition samples.",
+                "selected date range. 'kill' = killer position, "
+                "'death' = victim position (incl. storm), "
+                "'traffic' = Position/BotPosition samples.",
                 "dates": per_date,
             }
-            with open(os.path.join(DATA_OUT, "heatmaps", f"{map_id}_{hk}.json"), "w") as fh:
+            with open(
+                os.path.join(DATA_OUT, "heatmaps", f"{map_id}_{hk}.json"), "w"
+            ) as fh:
                 json.dump(out, fh, separators=(",", ":"))
 
     # --- minimap re-encode --------------------------------------------------
@@ -251,7 +289,19 @@ def main():
     # LANCZOS pass keeps peak memory low instead of holding an 8-bit 9000^2 RGB
     # buffer (~240 MB) in RAM.
     minimap_meta = {}
-    for map_id, src in MINIMAPS.items():
+    minimap_dir = os.path.join(DATA, "minimaps")
+    for map_id, candidates in MINIMAP_SOURCES.items():
+        src = next(
+            (
+                os.path.join(minimap_dir, c)
+                for c in candidates
+                if os.path.exists(os.path.join(minimap_dir, c))
+            ),
+            None,
+        )
+        if src is None:
+            print(f"WARNING no minimap source for {map_id} in {minimap_dir} — skipping")
+            continue
         img = Image.open(src)
         img.draft("RGB", (2048, 2048))
         img = img.convert("RGB")
@@ -266,8 +316,10 @@ def main():
             "src_bytes": os.path.getsize(src),
             "out_bytes": os.path.getsize(dst),
         }
-        print(f"minimap {map_id}: {os.path.getsize(src)//1024} KB -> "
-              f"{os.path.getsize(dst)//1024} KB")
+        print(
+            f"minimap {map_id}: {os.path.getsize(src) // 1024} KB -> "
+            f"{os.path.getsize(dst) // 1024} KB"
+        )
 
     # --- manifest ---------------------------------------------------------
     manifest = {

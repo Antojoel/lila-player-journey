@@ -103,7 +103,13 @@ export function drawJourney(
       const x = ev.px * k;
       const y = ev.py * k;
       markers.push({
-        x, y, r: 8, kind: ev.k, playerId: player.id, human: player.human, t: ev.t,
+        x,
+        y,
+        r: 8,
+        kind: ev.k,
+        playerId: player.id,
+        human: player.human,
+        t: ev.t,
       });
       drawMarker(ctx, x, y, ev.k, dim ? 0.25 : 1, false);
     }
@@ -188,7 +194,11 @@ export function drawMarker(
 }
 
 /** Nearest marker within tolerance of (mx,my), or null. */
-export function pickMarker(markers: MarkerHit[], mx: number, my: number): MarkerHit | null {
+export function pickMarker(
+  markers: MarkerHit[],
+  mx: number,
+  my: number,
+): MarkerHit | null {
   let best: MarkerHit | null = null;
   let bestD = Infinity;
   for (const m of markers) {
@@ -221,9 +231,12 @@ export function pickPath(
     const pts = visibleUpTo(p, tMs);
     for (let i = 1; i < pts.length; i++) {
       const d = distToSeg(
-        mx, my,
-        pts[i - 1][0] * k, pts[i - 1][1] * k,
-        pts[i][0] * k, pts[i][1] * k,
+        mx,
+        my,
+        pts[i - 1][0] * k,
+        pts[i - 1][1] * k,
+        pts[i][0] * k,
+        pts[i][1] * k,
       );
       if (d < bestD) {
         bestD = d;
@@ -234,7 +247,14 @@ export function pickPath(
   return best;
 }
 
-function distToSeg(px: number, py: number, ax: number, ay: number, bx: number, by: number) {
+function distToSeg(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+) {
   const dx = bx - ax;
   const dy = by - ay;
   const len2 = dx * dx + dy * dy || 1;
@@ -245,7 +265,10 @@ function distToSeg(px: number, py: number, ax: number, ay: number, bx: number, b
 
 // --- heatmap ---------------------------------------------------------------
 
-export function sumHeatmap(hm: Heatmap, dates: string[] | null): {
+export function sumHeatmap(
+  hm: Heatmap,
+  dates: string[] | null,
+): {
   cells: Float64Array;
   max: number;
 } {

@@ -1,0 +1,7 @@
+_verify/
+__pycache__/
+*.pyc
+.venv/
+pyproject.toml
+Dockerfile
+.dockerignore

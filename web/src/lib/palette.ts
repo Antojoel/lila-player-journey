@@ -2,8 +2,16 @@ import type { EventKind, HeatmapKind } from "./types";
 
 /** Vivid, mutually distinct hues for human players (readable on a dark map). */
 export const HUMAN_COLORS = [
-  "#f5c518", "#4ea1ff", "#ff6b6b", "#46d39a", "#c78bff",
-  "#ff9f45", "#38d0e0", "#ff7ac6", "#a3e635", "#9aa7ff",
+  "#f5c518",
+  "#4ea1ff",
+  "#ff6b6b",
+  "#46d39a",
+  "#c78bff",
+  "#ff9f45",
+  "#38d0e0",
+  "#ff7ac6",
+  "#a3e635",
+  "#9aa7ff",
 ];
 
 /** All bots share one cool slate colour + a dashed stroke, so humans always read
@@ -46,7 +54,10 @@ export const HEATMAP_RAMP: Record<HeatmapKind, [number, number, number][]> = {
   ],
 };
 
-export function rampColor(ramp: [number, number, number][], t: number): [number, number, number] {
+export function rampColor(
+  ramp: [number, number, number][],
+  t: number,
+): [number, number, number] {
   const x = Math.max(0, Math.min(1, t)) * (ramp.length - 1);
   const i = Math.floor(x);
   const f = x - i;
