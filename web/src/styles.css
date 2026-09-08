@@ -693,3 +693,234 @@ button:focus-visible {
     max-height: none;
   }
 }
+
+/* ---------- upload landing ---------- */
+.landing {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.landing-card {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 18px;
+}
+.landing .brand {
+  justify-content: center;
+}
+.drop {
+  display: grid;
+  gap: 6px;
+  place-items: center;
+  padding: 44px 24px;
+  border: 2px dashed var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    background 0.12s;
+}
+.drop strong {
+  font-size: 15px;
+}
+.drop span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.drop:hover,
+.drop.over {
+  border-color: var(--accent);
+  background: #161d26;
+}
+.landing-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+  text-align: center;
+}
+.landing-note code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+}
+
+.proc {
+  display: grid;
+  gap: 12px;
+}
+.proc-row {
+  display: grid;
+  gap: 5px;
+}
+.proc-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.proc-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.proc-bar > div {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  transition: width 0.2s;
+}
+.proc-row.err .proc-bar > div {
+  background: var(--danger);
+}
+.proc-err {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--danger);
+  white-space: pre-wrap;
+}
+
+/* ---------- dataset bar ---------- */
+.ds-bar {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 10px;
+}
+.ds-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.ds-add {
+  font: inherit;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+.ds-add:hover {
+  background: var(--accent);
+  color: #10141a;
+}
+.ds-list {
+  display: grid;
+  gap: 4px;
+}
+.ds-item {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+.ds-pick {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.ds-item.on .ds-pick {
+  border-color: var(--accent);
+  background: #1c2330;
+}
+.ds-warn {
+  font-size: 10px;
+  color: #f5c518;
+  border: 1px solid #5a4a15;
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.ds-x {
+  width: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+.ds-x:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.ds-jobs {
+  display: grid;
+  gap: 6px;
+}
+.ds-job {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  font-size: 11px;
+}
+.ds-job-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.ds-job-bar > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+.ds-job.err span {
+  color: var(--danger);
+}
+.ds-warnlist {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--muted);
+  display: grid;
+  gap: 3px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+/* ---------- misc ---------- */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgba(11, 14, 18, 0.82);
+  border: 3px dashed var(--accent);
+  color: var(--accent);
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+.map-grid {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(#1a2029 1px, transparent 1px) 0 0 / 64px 64px,
+    linear-gradient(90deg, #1a2029 1px, transparent 1px) 0 0 / 64px 64px,
+    #0d1116;
+}

@@ -2,10 +2,11 @@
 #
 #   docker compose up web                     serve the site on http://localhost:8080
 #   PLAYER_DATA_DIR=/abs/path/to/player_data \
-#     docker compose run --rm pipeline         regenerate web/public/data + minimaps
+#     docker compose run --rm pipeline         bake web/public/data as a bundled dataset
 #
-# The "pipeline" service is under a profile so `compose up` never runs it — the
-# generated data is committed, so the site works without touching the raw files.
+# The app is upload-driven (drop a zip in the browser). The "pipeline" service is
+# optional and profile-gated — it only exists to pre-bake a dataset the app loads
+# on boot, e.g. for a demo deploy, or to process a dataset too big for a tab.
 
 services:
   web:

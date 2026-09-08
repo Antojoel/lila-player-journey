@@ -2,66 +2,77 @@
 
 ## What I built with, and why
 
-- **Pipeline:** Python + **DuckDB** (reads Parquet regardless of extension, does
-  the grouping/binning in one pass) + Pillow (minimap re-encode). One-shot batch
-  job: ~4 s, ~1.2 GB peak RAM (row working set ~90 MB; rest is DuckDB's runtime),
-  no GPU/network.
-- **Frontend:** **React 18 + TypeScript + Vite 7**, rendering hand-rolled HTML
-  `<canvas>` over the minimap `<img>`. No map or charting library — the minimap
-  is a fixed image in a known 1024-px space, so a mapping stack (Mapbox/deck.gl)
-  would be weight with no payoff.
-- **Hosting:** a static `dist/` folder. No backend, database, or runtime compute.
+- **Frontend:** React 18 + TypeScript + Vite 7. Journeys/heatmaps are hand-drawn
+  on stacked `<canvas>` over the minimap `<img>` — no map or charting library
+  (the minimap is a fixed image in a known 1024-px space; a mapping stack would
+  be weight with no payoff).
+- **In-browser pipeline:** [DuckDB-WASM](https://duckdb.org/docs/api/wasm/overview)
+  (reads the `.nakama-0` Parquet files, does the grouping in SQL), JSZip
+  (unpack), a TS port of the classification/coord/timestamp logic, `idb`
+  (IndexedDB). The DuckDB wasm+worker are bundled locally (no CDN) and
+  code-split — the ~9 MB gzip payload loads only when the first zip is dropped.
+- **Offline pipeline (twin):** the same logic in Python + DuckDB
+  (`pipeline/build.py`). Used to bake an optional bundled dataset, for CI, and as
+  the parity reference. Verified: on the sample data it and the browser pipeline
+  produce **identical** manifest counts and match content (paths, events,
+  timestamps, pixel coords).
+- **Hosting:** a static `dist/` folder. No backend, database, or upload endpoint.
 
-**Why static precompute, not a live API.** The dataset is frozen (5 days,
-never appended) and tiny (~89 K rows). Every upside of a backend is ad-hoc
-querying we don't need; its downside — a free-tier instance cold-starting or
-sleeping — lands exactly when a reviewer opens the link. So the pipeline does all
-aggregation once and the browser only draws. Trade-off accepted: a genuinely new
-question means re-running the pipeline, not a new query.
+**Why the pipeline runs in the browser.** A Level Designer needs to open one link
+and load a fresh `month_x.zip` themselves, with nothing to maintain. A server
+that unzips + analyses uploads would be a thing to keep alive, and a free-tier
+instance cold-starting or sleeping lands exactly when a reviewer clicks the link.
+The dataset is small enough (~89 K rows for the sample; a month is ~1/3 that) that
+DuckDB-WASM crunches it in a few seconds in a tab. So the browser does the whole
+pipeline and the site stays a static upload.
+
+Trade-off accepted: a genuinely huge dataset (many GB) would strain a tab — for
+that, `pipeline/build.py` is the escape hatch, and its output can be shipped as
+the bundled dataset.
 
 ## How data flows from Parquet to screen
 
 ```
-player_data/<day>/<user_id>_<match_id>.nakama-0   (Parquet ×1243)
-        │  pipeline/build.py  — one try/except per file, corrupt files logged & skipped
-        │    decode event bytes → classify (kill/death/storm_death/loot/move)
-        │    user_id shape → human (UUID) | bot (numeric)
-        │    world (x,z) → minimap pixel   |   ts → per-match relative, ×1000 → real ms
-        │    group by match_id → players[]{ path[], events[] }
-        │    bin kill/death/traffic into 96×96 grids, split per collection day
-        │    re-encode 3 minimaps: 3–12 MB PNG/JPG → ~65 KB WebP
-        ▼
-web/public/data/manifest.json         one row/match — feeds every dropdown (~120 KB)
-web/public/data/matches/<id>.json     per-match paths+events, fetched on click (~5 KB)
-web/public/data/heatmaps/<map>_<kind>.json   sparse, day-bucketed count grids
-web/public/minimaps/<map>.webp
-        │  fetch() only — no other network calls
-        ▼
-React SPA:  App (filter state, lazy match/heatmap load, playback clock)
-            Controls (map/date/match filters, toggles, legend)
-            MapCanvas (<img> + heatmap canvas + journey canvas + hit-testing)
-            Timeline (scrubber, play/pause, speed, event ticks)
+                    ┌─ user drops month_x.zip (or several) ─┐
+                    ▼                                        │
+  JSZip: extract *.nakama-0 buffers + minimaps/ images      │  bulk upload:
+                    ▼                                        │  each zip -> one
+  DuckDB-WASM: read_parquet([...], filename=true)            │  Dataset, plus a
+    epoch_ms(ts), CAST(event AS VARCHAR)                     │  "Combined" merge
+                    ▼                                        │
+  TS pipeline (mirror of pipeline/lib.py + build.py):        │
+    user_id shape -> human | bot                             │
+    world (x,z) -> minimap pixel   |   ts×1000 -> real ms    │
+    group by match_id -> players[]{ path[], events[] }       │
+    bin kill/death/traffic into 96×96 grids, split per day   │
+  createImageBitmap: minimap image -> 1024² WebP blob        │
+                    ▼                                        │
+  Dataset { manifest, matches:Map, heatmaps:Map,             │
+            minimaps:Map<MapId,Blob>, warnings[] }  ─────────┘
+                    ▼
+  IndexedDB (persist, local only)   ──►   App state (active dataset)
+                    ▼
+  Controls · MapCanvas (canvas over minimap) · Timeline
 ```
 
-`manifest.json` holds only what the filter UI needs; full path data is one file
-per match, fetched on selection and cached. Opening the tool = one manifest
-fetch; exploring = ~5 KB per match.
+Optional bundled branch: if `web/public/data/` exists (someone ran
+`pipeline/build.py` / the Docker pipeline, or a deploy shipped with data), the
+app `fetch()`es it on boot as a read-only "Bundled dataset". Absent by default —
+the repo ships **no** data.
 
-Heatmaps are 96×96 count grids per map × kind (`kill` = killer position, `death` =
-victim position incl. storm, `traffic` = every position sample), stored sparsely
-and **split by collection day** so the date filter sums an exact range rather than
-being all-time only. Rendered by upscaling the grid through a tiny offscreen
-canvas, composited with `screen` so the map stays readable.
+Everything downstream of `Dataset` is one shape: `manifest` feeds the dropdowns,
+`matches.get(id)` and `heatmaps.get(map_kind)` are synchronous lookups.
 
 ## Mapping game coordinates to the minimap
 
-World `x`/`z` → pixels (`y` is elevation, unused), per the dataset README:
+World `x`/`z` → pixels (`y` is elevation, unused), per the dataset README, done
+identically in `pipeline/lib.py` and `web/src/lib/pipeline/constants.ts`:
 
 ```
 u = (x - origin_x) / scale
 v = (z - origin_z) / scale
 pixel_x = u * 1024
-pixel_y = (1 - v) * 1024        # image origin is top-left; world +z is "up"
+pixel_y = (1 - v) * 1024          # image origin is top-left; world +z is "up"
 ```
 
 | Map | scale | origin_x | origin_z |
@@ -70,44 +81,46 @@ pixel_y = (1 - v) * 1024        # image origin is top-left; world +z is "up"
 | GrandRift | 581 | −290 | −290 |
 | Lockdown | 1000 | −500 | −500 |
 
-**Verified two ways** by `pipeline/verify_coords.py`: (1) the README's own worked
-example, world `(-301.45, -355.55)` on AmbroseValley → pixel `(78, 890)`, matches
-exactly; (2) a few thousand real position samples + the data's bounding-box
-corners plotted onto each real minimap — on all three maps they land on roads and
-structures and stay inside the playable island. The pipeline emits coords in this
-fixed 1024 space; the frontend scales by `canvasSize / 1024`, so rendering is
+**Verified** by `pipeline/verify_coords.py`: (1) the README's worked example,
+world `(-301.45, -355.55)` on AmbroseValley → pixel `(78, 890)`, exact; (2) a few
+thousand real position samples plotted onto each minimap all land on roads and
+structures inside the playable island. The pipeline emits coords in this fixed
+1024 space; the canvas scales by `size / 1024`, so rendering is
 resolution-independent.
+
+## Timestamp handling
+
+`ts` is `timestamp[ms]`, but one match spans only ~700 units and the absolute
+values only fall in Feb 2026 when ×1000 — the export put *seconds* into a
+millisecond field. Both pipelines normalise per match (subtract min) and ×1000.
+Recovered match lengths are sane: median 6.4 min, p90 12.
 
 ## Assumptions where the data was ambiguous
 
-- **`ts` units.** `ts` is `timestamp[ms]`, but a whole match spans only ~700
-  units and the absolute values only fall in Feb 2026 when ×1000 — the export put
-  *seconds* into a millisecond field. Pipeline normalises per match (subtract
-  min) and ×1000. Result: sane match lengths, median 6.4 min, p90 12.
-- **Human vs bot** is decided *only* by `user_id` shape (UUID vs numeric), never
-  by event name — a few bot files contain `Position`/`Loot` rows that a
-  name-based check would misread.
-- **Combat event ownership:** an event belongs to the file's owner. `Kill`/
-  `BotKill` → that player got a kill (plotted at killer position). `Killed`/
-  `BotKilled`/`KilledByStorm` → that player died (victim position). The README
-  phrases `BotKilled` as "killed by a bot"; under the file-owner rule that still
-  means the owner died, so they agree. Only bot-vs-bot rows are genuinely
-  ambiguous; treated as that bot's kill/death.
-- **Map per match** = modal `map_id` across its rows (always consistent here).
-  One match_id spans two day folders → assigned the earlier day.
-- **Feb 14 is a partial collection day** — included and labelled; lower counts
-  are expected.
-- **Corrupt files** are counted and logged (`pipeline/_verify/skipped.txt`), not
-  fatal. None fail on the current dataset (1243/1243 parse).
+- **`ts` units** — ×1000 to real ms (above).
+- **Human vs bot** — `user_id` shape only (UUID vs numeric), never event name; a
+  few bot files carry `Position` rows a name check would misread.
+- **Combat event ownership** — an event belongs to the file's owner. `Kill`/
+  `BotKill` → that player got a kill (killer position → *kill zones*). `Killed`/
+  `BotKilled`/`KilledByStorm` → that player died (victim position → *death
+  zones*). Only bot-vs-bot rows are genuinely ambiguous; treated as that bot's.
+- **Match date** — from the day folder inside the zip (`February_10`);
+  `<Month>_<DD>` is parsed generically, unknown names pass through.
+- **Unknown `map_id`** — rows dropped with a warning (no minimap / config); the
+  zip may include `minimaps/<Name>` to supply one.
+- **Corrupt / truncated files** — the bulk read falls back to a per-file scan
+  that isolates, counts and lists each failure as a dataset warning.
+- **`y` (elevation)** is ignored — only `x`/`z` map to the 2D minimap.
 
 ## Major trade-offs
 
 | Decision | Alternative | Why this way |
 |---|---|---|
-| Static precompute, no backend | Live API over Parquet | Frozen tiny dataset; backend's only upside unused, its cold-start downside hits at review time |
-| `ts` × 1000 → real ms | Use raw units, label "ticks" | Raw values only make sense as epoch-ms ÷ 1000; ×1000 gives match lengths matching the README |
-| Human/bot by id regex only | Also infer from event names | id shape is unambiguous; some bot files carry `Position` rows |
-| One JSON per match, lazy-loaded | One bundled file | 796 matches, one viewed at a time — first load stays ~120 KB |
-| Heatmap grids split by day | All-time only | Makes the date filter exact for a few KB more (sparse storage) |
-| Hand-rolled canvas | Mapbox / deck.gl / charting lib | Minimap is a fixed image in known pixel space — a mapping stack adds weight, no benefit |
-| Commit generated JSON | Regenerate in CI | Raw `player_data/` isn't public; committing derived data makes the repo self-contained and the deploy reproducible |
+| Pipeline runs in the browser | Upload endpoint runs it server-side | No host to keep alive; free-tier cold-start hits at review time; dataset is small enough for a tab |
+| Two pipeline implementations (TS + Python) | One | Python is the CI/offline/parity twin and bakes the optional bundled dataset; a parity check keeps them honest |
+| DuckDB-WASM bundled + code-split | CDN load; or hand-rolled Parquet reader | Offline-capable, works on any static host; ~9 MB gzip only downloads on first upload |
+| Datasets in IndexedDB, local only | Server storage; or session-only | "Nothing is uploaded" holds; a refresh keeps your work |
+| Ship no data; upload-driven | Commit the sample | The employer's production data isn't ours to publish; the app is meant to take fresh drops |
+| One `Dataset` object, sync lookups | Fetch per match | A month fits in memory; removes all per-match async plumbing |
+| `ts` ×1000 → real ms | Raw units, label "ticks" | Raw only makes sense as epoch-ms ÷ 1000; ×1000 matches the README's "several minutes" |
+| Hand-rolled canvas | Mapbox / deck.gl / charting lib | Minimap is a fixed image in known pixel space |

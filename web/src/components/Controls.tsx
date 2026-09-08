@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Legend } from "./Legend";
 import { mmss, prettyDate, shortId } from "../lib/format";
 import {
@@ -31,7 +31,7 @@ interface Props {
   matchId: string | null;
   setMatchId: (id: string) => void;
   matchData: MatchData | null;
-  loadingMatch: boolean;
+  datasetBar: ReactNode;
 
   showHumans: boolean;
   setShowHumans: (b: boolean) => void;
@@ -79,6 +79,8 @@ export function Controls(p: Props) {
           <p>Player Journey Explorer</p>
         </div>
       </header>
+
+      {p.datasetBar}
 
       <p className="intro">
         See how players move through a match, or switch to a heatmap of where fights and

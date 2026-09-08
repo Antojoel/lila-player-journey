@@ -10,12 +10,11 @@ import {
 import { EVENT_STYLE } from "../lib/palette";
 import { mmss } from "../lib/format";
 import type { Heatmap, HeatmapKind, MapId, MatchData, Player } from "../lib/types";
-import { minimapURL } from "../lib/api";
 
 interface Props {
   mapId: MapId | null;
+  minimapUrl: string | null;
   match: MatchData | null;
-  loadingMatch: boolean;
   mode: "journey" | "heatmap";
   heatmap: Heatmap | null;
   heatmapKind: HeatmapKind;
@@ -53,8 +52,8 @@ function useElementSize<T extends HTMLElement>() {
 export function MapCanvas(props: Props) {
   const {
     mapId,
+    minimapUrl,
     match,
-    loadingMatch,
     mode,
     heatmap,
     heatmapKind,
@@ -195,7 +194,7 @@ export function MapCanvas(props: Props) {
     setTip(null);
   };
 
-  const showEmpty = mode === "journey" && !match && !loadingMatch;
+  const showEmpty = mode === "journey" && !match;
 
   return (
     <div className="map-stage">
@@ -206,13 +205,15 @@ export function MapCanvas(props: Props) {
         onMouseLeave={onLeave}
         onClick={onClick}
       >
-        {mapId && (
+        {mapId && minimapUrl ? (
           <img
             className="map-img"
-            src={minimapURL(mapId)}
+            src={minimapUrl}
             alt={`${mapId} minimap`}
             draggable={false}
           />
+        ) : (
+          <div className="map-grid" />
         )}
         <div className="map-dim" style={{ opacity: mapDim }} />
         <canvas className="map-layer" ref={heatRef} />
@@ -230,7 +231,6 @@ export function MapCanvas(props: Props) {
           </button>
         )}
 
-        {loadingMatch && <div className="map-note">Loading match…</div>}
         {showEmpty && (
           <div className="map-note">
             Pick a match on the left — or a quick pick — to trace its player journeys.

@@ -4,6 +4,10 @@ An interactive web tool for a **Level Designer** to see how players actually mov
 through LILA BLACK matches: routes on the correct minimap, kill / death / loot /
 storm markers, timeline playback, and kill / death / traffic heatmaps.
 
+You drop a `player_data.zip` (or a new `month_x.zip`) onto the page and it's
+unpacked and analysed **entirely in your browser** — there is no backend and no
+data is uploaded anywhere.
+
 **Live:** _<add deployment URL here>_
 
 ![overview](docs/overview.jpg)
@@ -14,7 +18,7 @@ storm markers, timeline playback, and kill / death / traffic heatmaps.
 
 | Requirement | How it's met |
 |---|---|
-| Load & parse the Parquet data | Python pipeline reads all 1,243 `.nakama-0` files (Parquet under a non-standard extension) |
+| Load & parse the Parquet data | The browser reads all 1,243 `.nakama-0` files (Parquet under a non-standard extension) with DuckDB-WASM. A Python twin (`pipeline/build.py`) produces byte-identical output for CI / offline / very large datasets. |
 | Player journeys on the right minimap, world coords mapped correctly | Per-map `scale`/`origin` → UV → pixel, Y-flipped; verified against the dataset README's worked example and by eye on all three maps |
 | Humans vs bots, visually distinct | Humans = solid line, one saturated colour each. Bots = **dashed** line, one muted slate colour. Distinct by **both** colour and line style. |
 | Distinct markers for kill / death / loot / storm death | Four separate canvas glyphs, colour-coded, always shown in the legend |
@@ -22,6 +26,12 @@ storm markers, timeline playback, and kill / death / traffic heatmaps.
 | Timeline / playback | Scrubber + play/pause + speed (10–120×). Paths draw up to the current time; markers pop in as playback passes them. Event ticks sit under the scrubber. |
 | Heatmap overlays (kills / deaths / traffic) | Precomputed count grids per map, per collection day. Toggle the kind; pick a day or all days. |
 | Hosted, shareable link | Fully static build — no backend. Deploys to any static host. |
+
+Getting data in:
+
+- **Drop a `.zip`** (day folders of `*.nakama-0` + a `minimaps/` folder) anywhere on the page — or several at once. Each becomes a **dataset** in a switcher; ≥2 uploads also get a **Combined** view.
+- Unpack → analyse → re-encode minimaps all run in the browser (DuckDB-WASM). Progress is shown per zip; unreadable files / unknown maps surface as dataset warnings.
+- Processed datasets are cached in **IndexedDB** — a refresh keeps them. Nothing leaves the browser.
 
 Built for the actual user (a Level Designer, not a data scientist):
 
@@ -36,33 +46,32 @@ Built for the actual user (a Level Designer, not a data scientist):
 
 ## Tech stack
 
-- **Pipeline:** Python 3, [DuckDB](https://duckdb.org/) (Parquet reader + aggregation), pandas (row shaping), Pillow (minimap re-encode). One-shot batch job: ~4 s, ~1.2 GB peak RAM (row working set is ~90 MB; the rest is DuckDB's runtime + the Parquet scan), no GPU or network. Runs on any laptop or a standard ≥2 GB CI runner.
-- **Frontend:** React 18 + TypeScript, [Vite](https://vitejs.dev/) 7. Rendering is hand-rolled HTML `<canvas>` layered over the minimap image — no charting or map library.
-- **Data transport:** static JSON + WebP images served from `/public`. The only network calls are `fetch()` for those files.
-- **Hosting:** static `dist/` — Vercel, Netlify, GitHub Pages, or `npx serve` all work.
+- **Frontend:** React 18 + TypeScript, [Vite](https://vitejs.dev/) 7. Journeys/heatmaps are hand-drawn on stacked HTML `<canvas>` over the minimap image — no charting or map library.
+- **In-browser pipeline:** [DuckDB-WASM](https://duckdb.org/docs/api/wasm/overview) (Parquet read + SQL grouping), [JSZip](https://stuk.github.io/jszip/) (unpack), a TS port of the classification/coord/timestamp logic, [`idb`](https://github.com/jakearchibald/idb) (IndexedDB). The DuckDB wasm+worker are bundled locally and **code-split** — the payload (~9 MB gzip) loads only on the first upload.
+- **Offline pipeline (twin):** Python 3 + DuckDB + pandas + Pillow (`pipeline/build.py`). Same logic, verified to produce identical output. Used for CI, for a very large dataset, or to bake an optional bundled dataset. One-shot batch job: ~4 s, ~1 GB peak RAM.
+- **Hosting:** a static `dist/` — Vercel, Netlify, GitHub Pages, Docker/nginx, or `npx serve`. No backend, no upload endpoint.
 
 ---
 
 ## Repo layout
 
 ```
-pipeline/            Python: parse Parquet -> static JSON + compressed minimaps
-  lib.py             coord mapping, human/bot detection, event classification
-  build.py           the pipeline entrypoint (env: PLAYER_DATA_DIR, OUTPUT_DIR)
-  verify_coords.py   renders sample points onto each minimap for a visual check
-  pyproject.toml     ruff (lint + format) config
-  requirements.txt / requirements-dev.txt
-  Dockerfile
 web/                 React + Vite frontend
-  src/lib/           types, data loading, canvas drawing, palette, match stats
-  src/components/    Controls, MapCanvas, Timeline, Legend
-  src/hooks/         usePlayback
-  public/data/       <- generated by the pipeline (committed so the site is self-contained)
-  public/minimaps/   <- generated by the pipeline
-  eslint.config.js / .prettierrc.json
-  Dockerfile / nginx.conf
-docker-compose.yml   `up web` serves the site; `run --rm pipeline` regenerates data
-Makefile             make help / data / dev / build / lint / format / check / docker-serve
+  src/lib/pipeline/   in-browser pipeline — DuckDB-WASM, unzip, runPipeline
+                      (constants.ts mirrors pipeline/lib.py), minimap re-encode
+  src/lib/            datasets.ts (IndexedDB + Combined merge), bundled.ts,
+                      types, canvas drawing, palette, match stats
+  src/components/     Landing, DatasetBar, Controls, MapCanvas, Timeline, Legend
+  src/hooks/          usePlayback
+  public/             ships empty; public/data is written by the Python pipeline (git-ignored)
+  eslint.config.js / .prettierrc.json / Dockerfile / nginx.conf
+pipeline/            Python twin: parse Parquet -> static JSON + compressed minimaps
+  lib.py             coord mapping, human/bot detection, event classification
+  build.py           entrypoint (env: PLAYER_DATA_DIR, OUTPUT_DIR, DATASET_YEAR)
+  verify_coords.py   renders sample points onto each minimap for a visual check
+  pyproject.toml (ruff) / requirements*.txt / Dockerfile
+docker-compose.yml   `up web` serves the site; `run --rm pipeline` bakes a bundled dataset
+Makefile             make help / dev / build / lint / format / check / docker-serve / data
 .github/workflows/   ci.yml (lint + typecheck + build + docker), deploy.yml (Pages)
 ARCHITECTURE.md      one-page design: what/why, data flow, coord walkthrough, trade-offs
 INSIGHTS.md          three findings from the data, each with a stat and a level-design takeaway
@@ -72,10 +81,10 @@ INSIGHTS.md          three findings from the data, each with a stat and a level-
 
 ## Running it
 
-There's a `Makefile` at the root — `make help` lists everything. The rest of this
-section is what those targets do.
+`make help` at the root lists every target. The rest of this section is what
+they do.
 
-### 1. Frontend (all you need — data is committed)
+### 1. Frontend (all you need)
 
 ```bash
 cd web
@@ -85,13 +94,16 @@ npm run build    # -> web/dist  (static, deploy this)
 npm run preview  # serve the production build locally
 ```
 
-**Node 20+** is required (Vite 7). No environment variables — no backend, no API
-keys, nothing to configure. `vite.config.ts` sets `base: "./"` so the build works
-at a domain root or any sub-path.
+**Node 20+** (Vite 7). No environment variables — no backend, nothing to
+configure. `vite.config.ts` sets `base: "./"` so the build works at a domain root
+or any sub-path. The app opens on a drop zone; drop `player_data.zip` (or your
+own `month_x.zip`) and it processes in the tab.
 
-### 2. Pipeline (only to regenerate data)
+### 2. Python pipeline (optional)
 
-The generated data is committed under `web/public/`, so this is optional.
+The browser does the pipeline, so this is only for CI, a very large dataset, or
+to bake a bundled dataset the app loads on boot (writes to `web/public/data`).
+Output is byte-identical to the browser's.
 
 ```bash
 python3 -m venv .venv
@@ -100,38 +112,30 @@ PLAYER_DATA_DIR=/path/to/player_data ./.venv/bin/python pipeline/build.py
 #   or:  make data PLAYER_DATA_DIR=/path/to/player_data
 ```
 
-Environment variables (all optional):
-
-| Var | Default | Meaning |
+| Env var | Default | Meaning |
 |---|---|---|
 | `PLAYER_DATA_DIR` | `~/Downloads/player_data` | raw dataset root — day folders + `minimaps/` |
 | `OUTPUT_DIR` | `web/public` | where `data/` and `minimaps/` are written |
-| `DATASET_YEAR` | `2026` | year for the `<Month>_<DD>` collection folders |
+| `DATASET_YEAR` | `2026` | year for the `<Month>_<DD>` folders |
 
-Day folders are auto-discovered (any sub-directory containing `*.nakama-0`), so a
-new `March_01/…` drop-in needs no code change. Outputs into `OUTPUT_DIR`:
-
-- `data/manifest.json` — one row per match; powers every dropdown without loading match detail.
-- `data/matches/<match_id>.json` — per-match paths + events, fetched on demand (≈5 KB each).
-- `data/heatmaps/<map>_<kind>.json` — sparse 96×96 count grids, split by collection day so any date range is exact.
-- `minimaps/<map>.webp` — the three minimaps re-encoded from 3–12 MB down to ~65 KB.
-
-`build.py` prints a summary and writes `pipeline/_verify/skipped.txt` listing any
-unreadable files (currently none — all 1,243 parse).
+Day folders are auto-discovered (any sub-directory with `*.nakama-0`), so a new
+`March_01/…` drop-in needs no code change. `build.py` prints a summary and lists
+any unreadable files in `pipeline/_verify/skipped.txt` (currently none — all
+1,243 parse). `verify_coords.py` renders the coordinate-mapping check overlays.
 
 ### 3. Docker
 
 ```bash
 docker compose up --build web        # site on http://localhost:8080
 PLAYER_DATA_DIR=/abs/path/to/player_data \
-  docker compose run --rm pipeline   # regenerate web/public/data + minimaps
+  docker compose run --rm pipeline   # bake web/public/data as a bundled dataset
 ```
 
 `web/Dockerfile` is a multi-stage build (Node build → nginx serving `dist/`).
-`pipeline/Dockerfile` runs `build.py` against `/data` (mounted read-only) writing
-to `/out`. On **Linux** the pipeline container runs at native speed; on **macOS**
-the bind-mount read of 1,243 small files is slow (~2–3 min) — use the native
-`make data` path for iterative local work, the container for CI / reproducibility.
+`pipeline/Dockerfile` runs `build.py` against `/data` (mounted read-only) → `/out`.
+On **Linux** the pipeline container runs at native speed; on **macOS** the
+bind-mount read of 1,243 small files is slow (~2–3 min) — the browser or native
+`make data` is faster for local work.
 
 ---
 
@@ -188,11 +192,13 @@ also in `ARCHITECTURE.md`; repeated here so nothing is buried.
   collection day and summed for the selected range on the client.
 - **February 14 is a partial day** (collection was ongoing) — it is included and
   labelled; its lower counts are expected, not a bug.
-- **Map per match** is taken as the modal `map_id` across the match's rows (they
-  are always consistent in this dataset). One match_id appears under two day
-  folders; it is assigned the earlier day.
-- **Corrupt files:** `build.py` reads the whole set in one query; if that throws,
-  it falls back to a per-file scan that isolates, counts and logs each failure
-  (`pipeline/_verify/skipped.txt`) and continues. None fail on the current dataset.
+- **Map per match** is the modal `map_id` across the match's rows (always
+  consistent here). A match_id under two day folders is assigned the earlier day.
+- **Unknown `map_id`** — rows are dropped with a dataset warning (no minimap /
+  config). A zip may include `minimaps/<Name>` to supply the image.
+- **Corrupt / truncated files:** both pipelines read the whole set in one query;
+  if that throws they fall back to a per-file scan that isolates, counts and
+  lists each failure (a dataset warning in the browser,
+  `pipeline/_verify/skipped.txt` offline). None fail on the current dataset.
 - **`y` (elevation)** is ignored for plotting, as instructed — only `x`/`z` map to
   the 2D minimap.
