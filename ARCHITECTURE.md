@@ -9,8 +9,8 @@
 - **In-browser pipeline:** [DuckDB-WASM](https://duckdb.org/docs/api/wasm/overview)
   (reads the `.nakama-0` Parquet files, does the grouping in SQL), JSZip
   (unpack), a TS port of the classification/coord/timestamp logic, `idb`
-  (IndexedDB). The DuckDB wasm+worker are bundled locally (no CDN) and
-  code-split — the ~9 MB gzip payload loads only when the first zip is dropped.
+  (IndexedDB). Only the `eh` wasm build ships (34 MB / ~8 MB gzip), bundled
+  locally (no CDN) and code-split — it loads only when the first zip is dropped.
 - **Offline pipeline (twin):** the same logic in Python + DuckDB
   (`pipeline/build.py`). Used to bake an optional bundled dataset, for CI, and as
   the parity reference. Verified: on the sample data it and the browser pipeline
@@ -22,9 +22,9 @@
 and load a fresh `month_x.zip` themselves, with nothing to maintain. A server
 that unzips + analyses uploads would be a thing to keep alive, and a free-tier
 instance cold-starting or sleeping lands exactly when a reviewer clicks the link.
-The dataset is small enough (~89 K rows for the sample; a month is ~1/3 that) that
-DuckDB-WASM crunches it in a few seconds in a tab. So the browser does the whole
-pipeline and the site stays a static upload.
+The 5-day sample is ~89 K rows and DuckDB-WASM crunches it in a few seconds in a
+tab; a monthly batch is a handful of times that — still comfortably in-tab. So
+the browser does the whole pipeline and the site stays a static upload.
 
 Trade-off accepted: a genuinely huge dataset (many GB) would strain a tab — for
 that, `pipeline/build.py` is the escape hatch, and its output can be shipped as
@@ -118,7 +118,7 @@ Recovered match lengths are sane: median 6.4 min, p90 12.
 |---|---|---|
 | Pipeline runs in the browser | Upload endpoint runs it server-side | No host to keep alive; free-tier cold-start hits at review time; dataset is small enough for a tab |
 | Two pipeline implementations (TS + Python) | One | Python is the CI/offline/parity twin and bakes the optional bundled dataset; a parity check keeps them honest |
-| DuckDB-WASM bundled + code-split | CDN load; or hand-rolled Parquet reader | Offline-capable, works on any static host; ~9 MB gzip only downloads on first upload |
+| DuckDB-WASM, `eh` build only, bundled + code-split | Ship both wasm builds; CDN load; hand-rolled Parquet reader | `eh` is universal since 2021 and needs no COOP/COEP; dropping `mvp` halves the deploy (76 → 35 MB); ~8 MB gzip downloads only on first upload |
 | Datasets in IndexedDB, local only | Server storage; or session-only | "Nothing is uploaded" holds; a refresh keeps your work |
 | Ship no data; upload-driven | Commit the sample | The employer's production data isn't ours to publish; the app is meant to take fresh drops |
 | One `Dataset` object, sync lookups | Fetch per match | A month fits in memory; removes all per-match async plumbing |

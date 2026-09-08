@@ -1,109 +1,166 @@
 # LILA BLACK — Player Journey Explorer
 
-An interactive web tool for a **Level Designer** to see how players actually move
-through LILA BLACK matches: routes on the correct minimap, kill / death / loot /
-storm markers, timeline playback, and kill / death / traffic heatmaps.
+A browser tool for a **Level Designer** to see how players actually move through
+LILA BLACK matches: routes on the correct minimap, kill / death / loot / storm
+markers, timeline playback, and kill / death / traffic heatmaps.
 
-You drop a `player_data.zip` (or a new `month_x.zip`) onto the page and it's
-unpacked and analysed **entirely in your browser** — there is no backend and no
-data is uploaded anywhere.
+**Live:** <https://web-two-jet-33.vercel.app/>
 
-**Live:** _<add deployment URL here>_
+There's no sample data baked in. Open the link, **drop a `player_data.zip`** (or a
+later `month_x.zip`) onto the page, and it is unpacked and analysed **entirely in
+your browser** — nothing is uploaded anywhere, and processed datasets are cached
+locally so a refresh keeps them.
 
 ![overview](docs/overview.jpg)
 
 ---
 
-## What it does
+## Requirements checklist
 
-| Requirement | How it's met |
-|---|---|
-| Load & parse the Parquet data | The browser reads all 1,243 `.nakama-0` files (Parquet under a non-standard extension) with DuckDB-WASM. A Python twin (`pipeline/build.py`) produces byte-identical output for CI / offline / very large datasets. |
-| Player journeys on the right minimap, world coords mapped correctly | Per-map `scale`/`origin` → UV → pixel, Y-flipped; verified against the dataset README's worked example and by eye on all three maps |
-| Humans vs bots, visually distinct | Humans = solid line, one saturated colour each. Bots = **dashed** line, one muted slate colour. Distinct by **both** colour and line style. |
-| Distinct markers for kill / death / loot / storm death | Four separate canvas glyphs, colour-coded, always shown in the legend |
-| Filter by map / date / match | Populated from `manifest.json`; match list is searchable and ranked by activity |
-| Timeline / playback | Scrubber + play/pause + speed (10–120×). Paths draw up to the current time; markers pop in as playback passes them. Event ticks sit under the scrubber. |
-| Heatmap overlays (kills / deaths / traffic) | Precomputed count grids per map, per collection day. Toggle the kind; pick a day or all days. |
-| Hosted, shareable link | Fully static build — no backend. Deploys to any static host. |
+Everything the assignment asks for, and where it lives.
 
-Getting data in:
+| Requirement | Done | How / where |
+|---|---|---|
+| Load and parse the Parquet data | ✅ | Browser reads all 1,243 `.nakama-0` files with **DuckDB-WASM** (`web/src/lib/pipeline/`). A Python twin (`pipeline/build.py`) gives byte-identical output for CI / very large data. |
+| Player journeys on the **correct** minimap, world coords mapped | ✅ | Per-map `scale`/`origin` → UV → pixel, Y-flipped. Verified against the dataset README's worked example and by plotting real samples on all 3 maps (`pipeline/verify_coords.py`). |
+| Humans vs bots, visually distinct | ✅ | Human = **solid** line, one bright colour each. Bot = **dashed** line, one muted slate colour. Distinct by *both* colour and line style. |
+| Distinct markers for kill / death / loot / storm death | ✅ | Four separate canvas glyphs (spark / X / purple diamond / gold diamond), colour-coded, always in the legend, hover for details. |
+| Filter by map / date / match | ✅ | Map + date dropdowns; a searchable match list ranked by activity; plus one-click **quick picks**. |
+| Timeline / playback | ✅ | Scrubber + play/pause (**spacebar**) + speed (10–120×) + jump to next/previous event. Paths draw up to the current time; markers pop in as playback passes them. |
+| Heatmap overlays: kill zones / death zones / traffic | ✅ | Precomputed 96×96 count grids per map, split by day so the date filter is exact. Toggle the kind; each has its own colour ramp + explanation. |
+| Hosted, shareable link | ✅ | Static build on Vercel (link above). No backend. |
+| Single GitHub repo with all code | ⬜ | Push the repo (commands below) — this is the only outstanding item. |
+| README (tech stack, setup, env vars) | ✅ | This file. |
+| `ARCHITECTURE.md`, one page | ✅ | What/why, data flow, coordinate-mapping walkthrough, assumptions, trade-offs table. |
+| `INSIGHTS.md`, three findings | ✅ | Each with a concrete stat, the metrics it moves, and why a Level Designer cares. |
 
-- **Drop a `.zip`** (day folders of `*.nakama-0` + a `minimaps/` folder) anywhere on the page — or several at once. Each becomes a **dataset** in a switcher; ≥2 uploads also get a **Combined** view.
-- Unpack → analyse → re-encode minimaps all run in the browser (DuckDB-WASM). Progress is shown per zip; unreadable files / unknown maps surface as dataset warnings.
-- Processed datasets are cached in **IndexedDB** — a refresh keeps them. Nothing leaves the browser.
+Built for a Level Designer, not a data scientist:
 
-Built for the actual user (a Level Designer, not a data scientist):
+- Matches read in plain language — `AmbroseValley · 6:24 · 1 human, 13 bots · 12 kills · 68 loot` — the hex id is a small subtitle.
+- **Quick picks** — one click for "Biggest fight", "Longest match", "Most storm deaths", "Quiet match" on the current map/date.
+- Players get friendly names (**Human A**, **Bot 3**). Click one — in the list or on the map — to **isolate** just that route.
+- **Map brightness** slider so paths and heatmaps read over the satellite art.
+- Always-visible legend, hover tooltips on every marker and path, sane defaults on load, explicit empty / progress states.
 
-- Matches are described in plain language — `AmbroseValley · 6:24 · 1 human, 13 bots · 12 kills · 68 loot` — not raw hex IDs.
-- **Quick picks**: one click for "Biggest fight", "Longest match", "Most storm deaths", "Quiet match" on the current map/date.
-- Players get friendly names (**Human A**, **Bot 3**). Click one in the list — or on the map — to **isolate** just that player's route.
-- **Map brightness** slider so the paths and heatmap read clearly over the satellite minimap.
-- Timeline: play/pause (**spacebar**), jump to next/previous event, adjustable speed.
-- Hover tooltips on every marker and path, an always-visible legend, sane defaults on load (busiest match, whole journey shown), and explicit loading / empty states.
+---
+
+## How to use it (walkthrough)
+
+1. **Open the link → drop a zip.** The page shows a drop zone. Drag
+   `player_data.zip` onto it (or click to pick files — several at once is fine).
+   You'll see a progress bar per zip: *unzipping → reading Parquet → classifying
+   → building matches → binning heatmaps → re-encoding minimaps*. The full sample
+   takes a few seconds.
+
+2. **Dataset switcher (top-left).** Each zip becomes a dataset. Drop a second
+   `month_x.zip` and a **Combined** entry appears that merges them. **✕** removes
+   one. Datasets persist in your browser (IndexedDB) — reload and they're still
+   there.
+
+3. **"One match" mode (default).**
+   - Pick a match from the list, or use a **quick pick**. The list is searchable
+     (`find by id / map`) and filtered by the **Map** and **Date** dropdowns.
+   - The map draws every player's route on the right minimap: **solid** lines are
+     humans (one colour each), **dashed** slate lines are bots. Filled dot = each
+     player's position at the current time.
+   - Markers: **✦** kill (where the killer stood), **✕** death, **◈ purple** storm
+     death, **◆ gold** loot. Hover any marker or route for player name, event, and
+     timestamp.
+   - **Players panel** lists everyone with their K/D/L. Click a player (there or
+     on the map) to **isolate** their route; an "Isolated: Human A ✕" chip lets
+     you clear it (or press **Esc**).
+   - **Humans / Bots** checkboxes hide either group.
+
+4. **Timeline (bottom).** ▶ / **spacebar** plays the match; the route reveals and
+   markers pop in as time advances. **⏮ / ⏭** jump to the previous / next event.
+   Drag the scrubber to any moment. Ticks under the bar mark every event, coloured
+   by kind. Change playback speed on the right.
+
+5. **Heatmap mode.** Switch the toggle at the top. Pick **Traffic** (where
+   players spend time), **Kill zones** (where killers stood), or **Death zones**
+   (where players died, storm included). Choose a **Map** and a **day** or *All 5
+   days* — counts are bucketed per day, so any range is exact.
+
+6. **Map brightness** slider dims the satellite art so overlays pop.
 
 ---
 
 ## Tech stack
 
-- **Frontend:** React 18 + TypeScript, [Vite](https://vitejs.dev/) 7. Journeys/heatmaps are hand-drawn on stacked HTML `<canvas>` over the minimap image — no charting or map library.
-- **In-browser pipeline:** [DuckDB-WASM](https://duckdb.org/docs/api/wasm/overview) (Parquet read + SQL grouping), [JSZip](https://stuk.github.io/jszip/) (unpack), a TS port of the classification/coord/timestamp logic, [`idb`](https://github.com/jakearchibald/idb) (IndexedDB). The DuckDB wasm+worker are bundled locally and **code-split** — the payload (~9 MB gzip) loads only on the first upload.
-- **Offline pipeline (twin):** Python 3 + DuckDB + pandas + Pillow (`pipeline/build.py`). Same logic, verified to produce identical output. Used for CI, for a very large dataset, or to bake an optional bundled dataset. One-shot batch job: ~4 s, ~1 GB peak RAM.
-- **Hosting:** a static `dist/` — Vercel, Netlify, GitHub Pages, Docker/nginx, or `npx serve`. No backend, no upload endpoint.
+- **Frontend:** React 18 + TypeScript, [Vite](https://vitejs.dev/) 7. Journeys and
+  heatmaps are hand-drawn on stacked HTML `<canvas>` over the minimap image — no
+  charting or map library.
+- **In-browser pipeline:** [DuckDB-WASM](https://duckdb.org/docs/api/wasm/overview)
+  (Parquet read + SQL grouping), [JSZip](https://stuk.github.io/jszip/) (unzip), a
+  TypeScript port of the classification / coordinate / timestamp logic,
+  [`idb`](https://github.com/jakearchibald/idb) (IndexedDB). The DuckDB
+  `wasm` + worker are bundled locally (no CDN) and **code-split** — the ~8 MB gzip
+  wasm downloads only on the first upload.
+- **Offline pipeline (twin):** Python 3 + DuckDB + pandas + Pillow
+  (`pipeline/build.py`). Same logic; verified to produce identical output. For CI,
+  a dataset too big for a tab, or baking an optional bundled dataset.
+- **Hosting:** a static `dist/` folder — Vercel here, but Netlify / GitHub Pages /
+  Docker+nginx / `npx serve` all work. **No backend, no database, no env vars.**
 
 ---
 
 ## Repo layout
 
 ```
-web/                 React + Vite frontend
-  src/lib/pipeline/   in-browser pipeline — DuckDB-WASM, unzip, runPipeline
-                      (constants.ts mirrors pipeline/lib.py), minimap re-encode
-  src/lib/            datasets.ts (IndexedDB + Combined merge), bundled.ts,
-                      types, canvas drawing, palette, match stats
-  src/components/     Landing, DatasetBar, Controls, MapCanvas, Timeline, Legend
-  src/hooks/          usePlayback
-  public/             ships empty; public/data is written by the Python pipeline (git-ignored)
-  eslint.config.js / .prettierrc.json / Dockerfile / nginx.conf
-pipeline/            Python twin: parse Parquet -> static JSON + compressed minimaps
-  lib.py             coord mapping, human/bot detection, event classification
-  build.py           entrypoint (env: PLAYER_DATA_DIR, OUTPUT_DIR, DATASET_YEAR)
-  verify_coords.py   renders sample points onto each minimap for a visual check
+web/                       React + Vite frontend
+  src/lib/pipeline/         in-browser pipeline
+    constants.ts            map config, event map, bot regex  (mirrors pipeline/lib.py)
+    duckdb.ts               lazy DuckDB-WASM instance
+    unzip.ts                pull *.nakama-0 + minimaps out of a zip
+    runPipeline.ts          the analysis — the TS port of build.py
+    minimaps.ts             re-encode a minimap image to a 1024² WebP
+    index.ts                processZip(): unzip -> analyse -> Dataset
+  src/lib/
+    datasets.ts             Dataset type, IndexedDB persistence, "Combined" merge
+    bundled.ts              optionally load web/public/data if the Python twin ran
+    types.ts / draw.ts / palette.ts / matchStats.ts / format.ts
+  src/components/           Landing, DatasetBar, Controls, MapCanvas, Timeline, Legend
+  src/hooks/usePlayback.ts
+  public/                   ships empty (public/data is git-ignored output)
+  Dockerfile / nginx.conf / eslint.config.js / .prettierrc.json
+
+pipeline/                   Python twin: parse Parquet -> static JSON + minimaps
+  lib.py                    coord mapping, human/bot detection, event classification
+  build.py                  entrypoint  (env: PLAYER_DATA_DIR, OUTPUT_DIR, DATASET_YEAR)
+  verify_coords.py          renders sample points onto each minimap for a visual check
   pyproject.toml (ruff) / requirements*.txt / Dockerfile
-docker-compose.yml   `up web` serves the site; `run --rm pipeline` bakes a bundled dataset
-Makefile             make help / dev / build / lint / format / check / docker-serve / data
-.github/workflows/   ci.yml (lint + typecheck + build + docker), deploy.yml (Pages)
-ARCHITECTURE.md      one-page design: what/why, data flow, coord walkthrough, trade-offs
-INSIGHTS.md          three findings from the data, each with a stat and a level-design takeaway
+
+docker-compose.yml          `up web` serves the site; `run --rm pipeline` bakes a dataset
+Makefile                    make help / dev / build / lint / format / check / docker-serve
+.github/workflows/          ci.yml (lint + typecheck + build + docker) · deploy.yml (Pages)
+ARCHITECTURE.md             one-page design doc
+INSIGHTS.md                 three findings from the data
 ```
 
 ---
 
-## Running it
+## Run it locally
 
-`make help` at the root lists every target. The rest of this section is what
-they do.
+`make help` at the root lists every target.
 
-### 1. Frontend (all you need)
+### Frontend (all you need)
 
 ```bash
 cd web
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # -> web/dist  (static, deploy this)
-npm run preview  # serve the production build locally
+npm run dev       # http://localhost:5173  — then drop a player_data.zip on it
+npm run build     # -> web/dist   (static, this is what deploys)
+npm run preview   # serve the production build locally
 ```
 
-**Node 20+** (Vite 7). No environment variables — no backend, nothing to
-configure. `vite.config.ts` sets `base: "./"` so the build works at a domain root
-or any sub-path. The app opens on a drop zone; drop `player_data.zip` (or your
-own `month_x.zip`) and it processes in the tab.
+**Node 20+** (Vite 7). No environment variables. `vite.config.ts` sets
+`base: "./"` so the build works at a domain root or any sub-path.
 
-### 2. Python pipeline (optional)
+### Python pipeline (optional)
 
-The browser does the pipeline, so this is only for CI, a very large dataset, or
-to bake a bundled dataset the app loads on boot (writes to `web/public/data`).
-Output is byte-identical to the browser's.
+The browser already does the pipeline. Run this only for CI, a dataset too big
+for a tab, or to bake a bundled dataset the app loads on boot (it writes to
+`web/public/data`). Output is byte-identical to the browser's.
 
 ```bash
 python3 -m venv .venv
@@ -118,37 +175,45 @@ PLAYER_DATA_DIR=/path/to/player_data ./.venv/bin/python pipeline/build.py
 | `OUTPUT_DIR` | `web/public` | where `data/` and `minimaps/` are written |
 | `DATASET_YEAR` | `2026` | year for the `<Month>_<DD>` folders |
 
-Day folders are auto-discovered (any sub-directory with `*.nakama-0`), so a new
-`March_01/…` drop-in needs no code change. `build.py` prints a summary and lists
-any unreadable files in `pipeline/_verify/skipped.txt` (currently none — all
-1,243 parse). `verify_coords.py` renders the coordinate-mapping check overlays.
+Day folders are auto-discovered (any sub-dir with `*.nakama-0`), so a `March_01/…`
+drop-in needs no code change. `build.py` prints a summary and lists any unreadable
+files in `pipeline/_verify/skipped.txt` (currently none — all 1,243 parse).
 
-### 3. Docker
+### Docker
 
 ```bash
-docker compose up --build web        # site on http://localhost:8080
-PLAYER_DATA_DIR=/abs/path/to/player_data \
-  docker compose run --rm pipeline   # bake web/public/data as a bundled dataset
+docker compose up --build web       # site on http://localhost:8080
+PLAYER_DATA_DIR=/abs/path \
+  docker compose run --rm pipeline  # bake web/public/data as a bundled dataset
 ```
 
 `web/Dockerfile` is a multi-stage build (Node build → nginx serving `dist/`).
-`pipeline/Dockerfile` runs `build.py` against `/data` (mounted read-only) → `/out`.
-On **Linux** the pipeline container runs at native speed; on **macOS** the
-bind-mount read of 1,243 small files is slow (~2–3 min) — the browser or native
-`make data` is faster for local work.
+`pipeline/Dockerfile` runs `build.py` against `/data` (read-only) → `/out`.
 
 ---
 
-## Deployment
+## Deploy
 
-Any static host. The build output is `web/dist/`.
+Static site, output is `web/dist/`.
 
-- **Vercel:** import the repo, set **Root Directory** to `web`, framework preset
-  *Vite*. Build `npm run build`, output `dist`. No env vars.
-- **Netlify:** base `web`, build `npm run build`, publish `web/dist`.
-- **GitHub Pages:** see `.github/workflows/deploy.yml` (builds `web/` and publishes
-  `dist/` on push to `main`).
-- **Docker / any container host:** `web/Dockerfile` → an ~50 MB nginx image.
+- **Vercel** (used here): `npx vercel login`, then `npx vercel --cwd web` and
+  `npx vercel --cwd web --prod`. Root directory `web`, framework auto-detects
+  Vite, no env vars. The `.vercel/` project link is git-ignored.
+- **Netlify:** base `web`, build `npm run build`, publish `web/dist` — or drag the
+  `web/dist` folder onto app.netlify.com/drop.
+- **GitHub Pages:** `.github/workflows/deploy.yml` builds `web/` and publishes on
+  push to `main`; enable Pages → Source: GitHub Actions.
+
+### Push the repo (outstanding submission item)
+
+```bash
+cd /Users/user/personal/lila
+git branch -m master main
+gh repo create lila-player-journey --public --source=. --remote=origin --push
+```
+
+The 34 MB DuckDB wasm is the only large file; every host above serves it
+compressed (~8 MB) and it loads only when someone drops a zip.
 
 ---
 
@@ -159,46 +224,46 @@ Any static host. The build output is `web/dist/`.
 | Frontend lint | ESLint 9 (flat config) + `typescript-eslint` + react-hooks | `npm run lint` |
 | Frontend format | Prettier | `npm run format` / `npm run format:check` |
 | Frontend types | `tsc --noEmit`, `strict: true` | `npm run typecheck` |
-| Pipeline lint + format | Ruff (`E`, `F`, `W`, `I`, `UP`, `B`, `SIM`, `C4`) | `ruff check pipeline` / `ruff format pipeline` |
+| Pipeline lint + format | Ruff (`E`, `F`, `W`, `I`, `UP`, `B`, `SIM`, `C4`) | `ruff check pipeline` |
 
-`make check` runs all of it (lint + format-check + typecheck + build + ruff) —
-the same set `.github/workflows/ci.yml` runs on every push and PR, alongside a
-`docker build` of both images. `.editorconfig` covers indentation for editors.
+`make check` runs the lot. `.github/workflows/ci.yml` runs the same on every push
+and PR, plus a `docker build` of both images. `.editorconfig` covers editor
+indentation.
 
 ---
 
 ## Assumptions & edge cases
 
-These are the places the data was ambiguous and a call had to be made. They're
-also in `ARCHITECTURE.md`; repeated here so nothing is buried.
+Where the data was ambiguous, the call I made. (Also in `ARCHITECTURE.md`.)
 
-- **`ts` units.** The `ts` column is a `timestamp[ms]`, but a whole match spans
-  only ~700 of those units. Reading the absolute values as real epoch
-  milliseconds puts them in Feb 2026 only if multiplied by 1000 — i.e. the export
-  stored *seconds* into a millisecond field. The pipeline normalises per match
-  (subtract the match's min `ts`) and multiplies by **1000** to recover real
-  elapsed time. This gives sensible match lengths (median **6.4 min**, p90 12).
-- **Human vs bot** is decided **only** by the `user_id` shape: a UUID is a human,
-  a short numeric id is a bot. Event names are *not* used for this (a handful of
-  bot files contain `Position`/`Loot` rows; they stay classified as bots).
-- **Combat event ownership.** `Kill`/`BotKill` in a file = that file's player got
-  a kill (plotted at the killer's position → *kill zones*). `Killed`/`BotKilled`/
-  `KilledByStorm` = that player died (plotted at the victim's position → *death
-  zones*). The dataset README phrases `BotKilled` as "killed by a bot"; under the
-  file-owner rule that still means the file's owner died, so the two agree. The
-  only genuinely ambiguous rows are `BotKill`/`BotKilled` inside *bot* files
-  (bot-vs-bot); those are treated as that bot's kill / death.
-- **Heatmap date filtering** is supported and exact: counts are bucketed per
-  collection day and summed for the selected range on the client.
-- **February 14 is a partial day** (collection was ongoing) — it is included and
-  labelled; its lower counts are expected, not a bug.
-- **Map per match** is the modal `map_id` across the match's rows (always
-  consistent here). A match_id under two day folders is assigned the earlier day.
-- **Unknown `map_id`** — rows are dropped with a dataset warning (no minimap /
+- **`ts` units.** `ts` is `timestamp[ms]`, but a whole match spans only ~700 of
+  those units, and the absolute values only land in Feb 2026 if multiplied by
+  1000 — the export put *seconds* into a millisecond field. Both pipelines
+  normalise per match (subtract the match's min `ts`) and **×1000**. Result:
+  sensible match lengths — median **6.4 min**, p90 12.
+- **Human vs bot** is decided **only** by `user_id` shape — a UUID is a human, a
+  short number is a bot. Event names are not used (a few bot files contain
+  `Position` / `Loot` rows that a name check would misread).
+- **Combat event ownership.** An event belongs to the file's owner. `Kill` /
+  `BotKill` → that player got a kill (drawn at the killer's position → *kill
+  zones*). `Killed` / `BotKilled` / `KilledByStorm` → that player died (victim's
+  position → *death zones*). The dataset README phrases `BotKilled` as "killed by
+  a bot"; under the file-owner rule that still means the file's owner died, so the
+  two agree. Only `BotKill` / `BotKilled` rows *inside a bot's file* (bot-vs-bot)
+  are genuinely ambiguous — treated as that bot's kill / death.
+- **Match date** comes from the day folder in the zip (`February_10` → `2026-02-10`);
+  any `<Month>_<DD>` name is parsed, others pass through unchanged.
+- **February 14 is a partial day** (collection was ongoing) — included and
+  labelled; its lower counts are expected.
+- **Map per match** = the modal `map_id` across the match's rows (always
+  consistent here). One match_id appears under two day folders — assigned the
+  earlier day.
+- **Unknown `map_id`** — rows dropped with a dataset warning (no minimap /
   config). A zip may include `minimaps/<Name>` to supply the image.
-- **Corrupt / truncated files:** both pipelines read the whole set in one query;
-  if that throws they fall back to a per-file scan that isolates, counts and
-  lists each failure (a dataset warning in the browser,
+- **Corrupt / truncated files** — the bulk read falls back to a per-file scan that
+  isolates, counts and lists each failure (a dataset warning in the browser,
   `pipeline/_verify/skipped.txt` offline). None fail on the current dataset.
-- **`y` (elevation)** is ignored for plotting, as instructed — only `x`/`z` map to
-  the 2D minimap.
+- **`y` (elevation)** is ignored for plotting — only `x` / `z` map to the 2D
+  minimap.
+- **Heatmap date filtering** is exact: cells are bucketed per collection day and
+  summed for the selected range on the client.
