@@ -24,3 +24,6 @@ web/public/minimaps/
 
 # vercel project link
 .vercel/
+
+# test bundles used locally
+web/public/*.zip
