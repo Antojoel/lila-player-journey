@@ -4,7 +4,7 @@ A browser tool for a **Level Designer** to see how players actually move through
 LILA BLACK matches: routes on the correct minimap, kill / death / loot / storm
 markers, timeline playback, and kill / death / traffic heatmaps.
 
-**Live:** <https://web-two-jet-33.vercel.app/>
+**Live:** <https://lila.antojoel.com/>
 
 There's no sample data baked in. Open the link, **drop a `player_data.zip`** (or a
 later `month_x.zip`) onto the page, and it is unpacked and analysed **entirely in
