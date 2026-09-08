@@ -28,8 +28,8 @@ Everything the assignment asks for, and where it lives.
 | Filter by map / date / match | ✅ | Map + date dropdowns; a searchable match list ranked by activity; plus one-click **quick picks**. |
 | Timeline / playback | ✅ | Scrubber + play/pause (**spacebar**) + speed (10–120×) + jump to next/previous event. Paths draw up to the current time; markers pop in as playback passes them. |
 | Heatmap overlays: kill zones / death zones / traffic | ✅ | Precomputed 96×96 count grids per map, split by day so the date filter is exact. Toggle the kind; each has its own colour ramp + explanation. |
-| Hosted, shareable link | ✅ | Static build on Vercel (link above). No backend. |
-| Single GitHub repo with all code | ⬜ | Push the repo (commands below) — this is the only outstanding item. |
+| Hosted, shareable link | ✅ | <https://lila.antojoel.com/> — static build on Vercel, no backend. |
+| Single GitHub repo with all code | ✅ | <https://github.com/Antojoel/lila-player-journey> |
 | README (tech stack, setup, env vars) | ✅ | This file. |
 | `ARCHITECTURE.md`, one page | ✅ | What/why, data flow, coordinate-mapping walkthrough, assumptions, trade-offs table. |
 | `INSIGHTS.md`, three findings | ✅ | Each with a concrete stat, the metrics it moves, and why a Level Designer cares. |
@@ -132,7 +132,7 @@ pipeline/                   Python twin: parse Parquet -> static JSON + minimaps
 
 docker-compose.yml          `up web` serves the site; `run --rm pipeline` bakes a dataset
 Makefile                    make help / dev / build / lint / format / check / docker-serve
-.github/workflows/          ci.yml (lint + typecheck + build + docker) · deploy.yml (Pages)
+.github/workflows/          ci.yml — lint + typecheck + build + docker build on every push
 ARCHITECTURE.md             one-page design doc
 INSIGHTS.md                 three findings from the data
 ```
@@ -201,16 +201,9 @@ Static site, output is `web/dist/`.
   Vite, no env vars. The `.vercel/` project link is git-ignored.
 - **Netlify:** base `web`, build `npm run build`, publish `web/dist` — or drag the
   `web/dist` folder onto app.netlify.com/drop.
-- **GitHub Pages:** `.github/workflows/deploy.yml` builds `web/` and publishes on
-  push to `main`; enable Pages → Source: GitHub Actions.
-
-### Push the repo (outstanding submission item)
-
-```bash
-cd /Users/user/personal/lila
-git branch -m master main
-gh repo create lila-player-journey --public --source=. --remote=origin --push
-```
+- **GitHub Pages / Cloudflare Pages / any static host:** build `web/` and serve
+  `web/dist`. (Cloudflare Pages' free tier caps files at 25 MB — the wasm is
+  34 MB — so use one of the others there.)
 
 The 34 MB DuckDB wasm is the only large file; every host above serves it
 compressed (~8 MB) and it loads only when someone drops a zip.
