@@ -66,6 +66,12 @@ Built for a Level Designer, not a data scientist:
    - Markers: **✦** kill (where the killer stood), **✕** death, **◈ purple** storm
      death, **◆ gold** loot. Hover any marker or route for player name, event, and
      timestamp.
+
+   ![marker detail](docs/markers.jpg)
+
+   *Zoomed in: solid gold = a human route, dashed blue = bots; red spark = kill,
+   white ✕ = death, gold ◆ = loot (storm deaths show as a purple ◈). Every glyph
+   is in the always-visible legend.*
    - **Players panel** lists everyone with their K/D/L. Click a player (there or
      on the map) to **isolate** their route; an "Isolated: Human A ✕" chip lets
      you clear it (or press **Esc**).
@@ -80,6 +86,11 @@ Built for a Level Designer, not a data scientist:
    players spend time), **Kill zones** (where killers stood), or **Death zones**
    (where players died, storm included). Choose a **Map** and a **day** or *All 5
    days* — counts are bucketed per day, so any range is exact.
+
+   ![kill-zone heatmap](docs/heatmap.jpg)
+
+   *Kill zones on AmbroseValley, all 5 days — combat collapses onto the central
+   compound band (see `INSIGHTS.md` #1).*
 
 6. **Map brightness** slider dims the satellite art so overlays pop.
 

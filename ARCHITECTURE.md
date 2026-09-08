@@ -88,6 +88,13 @@ structures inside the playable island. The pipeline emits coords in this fixed
 1024 space; the canvas scales by `size / 1024`, so rendering is
 resolution-independent.
 
+![coordinate check](docs/coord-check.jpg)
+
+*`verify_coords.py` output for AmbroseValley — the README's worked example
+(yellow), the data's world-bounding-box corners (red), and thousands of real
+`Position` / `BotPosition` samples (cyan/pink). Everything lands on the playable
+island, on roads and structures.*
+
 ## Timestamp handling
 
 `ts` is `timestamp[ms]`, but one match spans only ~700 units and the absolute
