@@ -1,16 +1,16 @@
 import * as duckdb from "@duckdb/duckdb-wasm";
-import mvpWasm from "@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url";
-import mvpWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url";
 import ehWasm from "@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url";
 import ehWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url";
 
-// Bundle the wasm + worker locally (no CDN fetch) so the app works offline and on
-// any static host. The "eh" (exception-handling) build needs no COOP/COEP headers;
-// only the threaded "coi" build would.
-const BUNDLES: duckdb.DuckDBBundles = {
-  mvp: { mainModule: mvpWasm, mainWorker: mvpWorker },
-  eh: { mainModule: ehWasm, mainWorker: ehWorker },
-};
+// Ship only the "eh" (WebAssembly exception-handling) build: it's supported by
+// every browser since 2021 (Chrome 95+, Firefox 100+, Safari 15.4+) and halves
+// the deploy — the "mvp" fallback would add ~39 MB that essentially no one loads.
+// It also needs no COOP/COEP headers (only the threaded "coi" build would), so it
+// works on any plain static host. Bundled locally, never fetched from a CDN.
+const ehBundle = { mainModule: ehWasm, mainWorker: ehWorker };
+// `mvp` points at the same assets so no second wasm file is emitted; on a modern
+// browser selectBundle() always resolves to `eh` anyway.
+const BUNDLES: duckdb.DuckDBBundles = { mvp: ehBundle, eh: ehBundle };
 
 let dbPromise: Promise<duckdb.AsyncDuckDB> | null = null;
 
@@ -21,7 +21,15 @@ export function getDuckDB(): Promise<duckdb.AsyncDuckDB> {
       const bundle = await duckdb.selectBundle(BUNDLES);
       const worker = new Worker(bundle.mainWorker!);
       const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
-      await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+      try {
+        await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+      } catch (e) {
+        throw new Error(
+          "Could not start the in-browser database (DuckDB-WASM). Your browser " +
+            "may be too old — Chrome 95+, Firefox 100+ or Safari 15.4+ is needed. " +
+            `(${String(e)})`,
+        );
+      }
       await db.open({ query: { castBigIntToDouble: true } });
       return db;
     })();

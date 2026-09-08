@@ -99,6 +99,16 @@ export default function App() {
     setTimeout(() => setJobs((cur) => (cur?.some((j) => j.error) ? cur : null)), 1200);
   }, []);
 
+  // Dev convenience: ?zip=<url> auto-loads a zip served by the dev server.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const u = new URLSearchParams(location.search).get("zip");
+    if (u)
+      fetch(u)
+        .then((r) => r.blob())
+        .then((b) => handleFiles([new File([b], u.split("/").pop() || "data.zip")]));
+  }, [handleFiles]);
+
   // --- window drag & drop ---
   useEffect(() => {
     const stop = (e: DragEvent) => {
